@@ -73,7 +73,11 @@ mechanism (a desktop window can't inject into Claude Code's status row).
 - [x] Shares the level model + sponsor-line rendering with the CLI (mirrors truth)
 - [x] Compiles clean (cargo check + vite build), `npm run tauri dev` launches
 - [x] Honest-earnings framing (tier CPMs, demand caveat) in the UI
-- [ ] Icons/branding polish + signed `tauri build` .dmg — external (signing cert)
+- [x] Production hardening: brand icons (icon-src.svg → all sizes), strict CSP,
+      bundle metadata (category/publisher/copyright/min-OS), release profile
+      (LTO/strip/opt-s), prod API default (api.sponsoric.io)
+- [x] `tauri build` → Sponsoric.app (4.5M) + verified .dmg (3.0M) produced
+- [ ] Apple Developer ID signing + notarization — **needs your signing cert**
 
 ## Critical path to a real dollar (all external now)
 1. Deploy backend + Postgres (your hosting)

@@ -35,6 +35,18 @@ The repo is a valid Claude Code plugin (`.claude-plugin/plugin.json` + `hooks/ho
 
 The plugin ships the wait-timing hooks. The **status line** is still configured by `npx sponsoric`, because a plugin's bundled `settings.json` cannot set the main `statusLine` (only `agent` / `subagentStatusLine` are supported by Claude Code).
 
+### Desktop app (optional GUI)
+
+A native control panel in [`app/`](app/) (Tauri + Rust) unifies install, ad level,
+earnings, and payouts in one window. It's a **companion**, not the ad surface —
+the status line stays the earning mechanism; the app just manages it, with your
+publisher key held on the Rust side.
+
+```bash
+cd app && npm install && npm run tauri dev      # run it
+cd app && npm run tauri build                    # build a .app / .dmg
+```
+
 ## How it works
 
 | Piece | Role |

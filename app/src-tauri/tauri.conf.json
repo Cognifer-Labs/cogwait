@@ -18,22 +18,32 @@
         "width": 980,
         "height": 720,
         "minWidth": 820,
-        "minHeight": 600
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "DeveloperTool",
+    "copyright": "© Cognifer Labs LLC",
+    "shortDescription": "Earn while your AI thinks.",
+    "longDescription": "Sponsoric renders one opt-in, labeled sponsor line in the Claude Code status row while you work, and shares ad revenue with you. This desktop app manages your install, ad level, earnings, and payouts. It never reads your code, files, or prompts.",
+    "publisher": "Cognifer Labs LLC",
+    "homepage": "https://github.com/cognifer-labs/sponsoric",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
   }
 }

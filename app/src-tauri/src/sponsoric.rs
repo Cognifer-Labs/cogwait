@@ -92,8 +92,10 @@ fn cfg_bool(cfg: &Value, key: &str) -> bool {
     }
 }
 fn api_base(cfg: &Value) -> String {
+    // Production default matches lib/client.js. Point at a local backend by
+    // setting the API base in Setup (or SPONSORIC_API for the CLI) during dev.
     let a = cfg_str(cfg, "api");
-    if a.is_empty() { "http://localhost:8787".into() } else { a }
+    if a.is_empty() { "https://api.sponsoric.io".into() } else { a }
 }
 
 // Try to locate the repo's bin/statusline.js so the install button works in dev.

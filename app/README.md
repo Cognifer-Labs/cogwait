@@ -35,5 +35,21 @@ npm run tauri build    # produces a .app / .dmg under src-tauri/target/release/b
 ```
 
 Requires the Rust toolchain and (macOS) Xcode command-line tools for WebKit.
+
+The build is **unsigned** — a signed, notarized `.dmg` needs an Apple Developer
+ID certificate (set `signingIdentity` / notarization creds and rebuild). Until
+then, opening on another Mac requires right-click → Open (Gatekeeper).
+
 The status-line install button wires in the repo's `bin/statusline.js`; point it
 at that path in **Setup** if auto-detection can't find it.
+
+## Production notes
+
+- API base defaults to `https://api.sponsoric.io`; override in **Setup** (or via
+  the CLI's `SPONSORIC_API`) to point at a local/self-hosted backend.
+- The publisher key is stored owner-only in `~/.sponsoric/config.json` and only
+  ever sent, from the Rust side, to that configured base.
+- A strict CSP is set in `tauri.conf.json`; the frontend never makes network
+  calls directly — all backend traffic goes through Rust commands.
+- App icon source is `src-tauri/icon-src.svg`; regenerate with
+  `rsvg-convert -w 1024 -h 1024 icon-src.svg -o i.png && npx tauri icon i.png`.
