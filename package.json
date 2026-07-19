@@ -4,8 +4,17 @@
   "description": "Earn revenue while your AI thinks — one opt-in, labeled sponsor line in the Claude Code status row. Never reads your code, files, or prompts.",
   "license": "MIT",
   "author": "Cognifer Labs LLC",
-  "repository": { "type": "git", "url": "https://github.com/cognifer-labs/sponsoric" },
-  "keywords": ["claude-code", "ads", "monetization", "statusline", "sponsor"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cognifer-labs/sponsoric"
+  },
+  "keywords": [
+    "claude-code",
+    "ads",
+    "monetization",
+    "statusline",
+    "sponsor"
+  ],
   "bin": {
     "sponsoric": "bin/setup.js"
   },
@@ -13,9 +22,21 @@
     "setup": "node bin/setup.js",
     "serve": "node server/index.js",
     "doctor": "node bin/doctor.js",
-    "test": "node test/smoke.js && node test/client.js && node test/backend.js && node test/adapter.js && node test/e2e.js",
+    "test": "node test/smoke.js && node test/client.js && node test/backend.js && node test/adapter.js && node test/store-interface.js && node test/e2e.js",
     "test:e2e": "node test/e2e.js"
   },
-  "engines": { "node": ">=18" },
-  "files": ["bin/", "lib/", "hooks/", ".claude-plugin/", "README.md"]
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "hooks/",
+    ".claude-plugin/",
+    "README.md"
+  ],
+  "//": "The client (bin/, lib/, hooks/) has ZERO runtime deps. `pg` is optional and used only by the backend when DATABASE_URL is set (server/store-pg.js); it is pure-JS and never touched by the statusline client.",
+  "optionalDependencies": {
+    "pg": "^8.22.0"
+  }
 }

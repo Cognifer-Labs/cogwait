@@ -16,7 +16,7 @@ Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your account
 - [x] Fixed security-review findings: payout redirection, earnings enumeration (IDOR), default admin token (see SECURITY.md)
 - [x] Campaign-based ad serving + budget decrement (house-ad fill)
 - [x] Backend test suite (`test/backend.js`)
-- [~] Data store — JSON file works single-node; swap for Postgres for prod (interface documented in docs/DEPLOY.md)
+- [x] Data store — JSON file (single-node) + **Postgres adapter** (`store-pg.js`, auto-selected on `DATABASE_URL`); atomic dedupe + daily cap; parity enforced by `test/store-interface.js`
 - [x] Serverless deploy adapter (`api/index.js` + `vercel.json`) + Dockerfile
 - [x] Advertiser stats endpoint (`GET /campaign/stats`)
 - [x] Configurable rate limit + explicit 429 test; offline-resilience test (renders cached ad when backend down)
@@ -85,7 +85,8 @@ mechanism (a desktop window can't inject into Claude Code's status row).
 3. Anthropic marketplace policy confirmed OK
 
 ## What's proven locally today
-- `npm test` — 4 suites green (smoke, client, backend, e2e)
-- Real impression settles end-to-end: $0.0014 credited, throttle + dedupe + cap enforced
+- `npm test` — 6 suites green (smoke, client, backend, adapter, store-interface, e2e)
+- Real impression settles end-to-end: tiered CPM credited (L1 $0.0056), throttle + atomic dedupe + cap enforced
+- Backend runs on JSON (single-node) or Postgres (`DATABASE_URL`) with identical behavior
 - Payout flow works (Stripe simulated without a key)
 - `claude plugin validate .` passes

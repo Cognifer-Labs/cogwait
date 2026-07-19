@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 'use strict';
-// Sponsoric backend — dependency-free reference implementation of the contract
-// in README.md, now with a persistent store, rate limiting, fraud caps,
-// campaign-based ad serving, and Stripe payouts. Single-node; for production
-// swap store.js for Postgres and deploy behind the platform in docs/DEPLOY.md.
+// Sponsoric backend — reference implementation of the contract in README.md.
+// Persistent store (JSON file, or Postgres when DATABASE_URL is set), rate
+// limiting, atomic fraud dedupe/caps, campaign-based ad serving, Stripe payouts.
 
 const http = require('http');
 const crypto = require('crypto');
@@ -34,27 +33,22 @@ function safeEqual(a, b) {
 }
 
 // Authenticate a publisher from `Authorization: Publisher <id>:<secret>`.
-// Returns the record only when the secret matches the stored one. Never creates.
-function authPublisher(req) {
+async function authPublisher(req) {
   const m = /^Publisher\s+([^:\s]+):(.+)$/.exec(req.headers['authorization'] || '');
   if (!m) return null;
-  const rec = store.getPublisher(m[1]);
+  const rec = await store.getPublisher(m[1]);
   if (!rec || !rec.secret) return null;
   return safeEqual(m[2], rec.secret) ? rec : null;
 }
 
 // Fraud/rate limits.
-const DEDUPE_MS = 10000;                 // same tag+ad within window = not billable
+const DEDUPE_MS = 10000;                 // same tag+ad within window = not billable (atomic in store)
 const MAX_IMPRESSIONS_PER_SESSION_DAY = 500;
 const RATE_WINDOW_MS = 1000;
-const RATE_MAX = Number(process.env.SPONSORIC_RATE_MAX || 20); // requests/sec per key
+const RATE_MAX = Number(process.env.SPONSORIC_RATE_MAX || 20); // requests/sec per key (per-instance)
 
-// What one viewable impression pays the publisher, by ad level. The level is
-// client-declared but never trusted blindly: it's clamped to a valid tier and
-// priced from the server's own CPM table, so a client can't invent a payout.
 const perImpression = (level) => levels.perImpression(level, PUBLISHER_SHARE);
-const rate = new Map();                   // key -> {count, reset}
-const dedupe = new Map();                 // tag:ad -> ts
+const rate = new Map();                   // key -> {count, reset} (per-instance; see DEPLOY.md)
 
 // Default house ads used when no advertiser campaign has budget (keeps fill at 100%).
 const HOUSE_ADS = [
@@ -63,14 +57,22 @@ const HOUSE_ADS = [
   { id: 'house-sentry', text: 'Sentry — see errors before your users do', url: 'https://sentry.io' }
 ];
 
+// Initialize the store once (schema/connect). Lazy so serverless cold starts work.
+let readyPromise = null;
+function ensureReady() { return readyPromise || (readyPromise = store.init()); }
+
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
   res.end(body);
 }
-function readBody(req, cb) {
-  let d = ''; req.on('data', (c) => { d += c; if (d.length > 1e6) req.destroy(); });
-  req.on('end', () => { try { cb(null, d ? JSON.parse(d) : {}); } catch (e) { cb(e); } });
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let d = '';
+    req.on('data', (c) => { d += c; if (d.length > 1e6) req.destroy(); });
+    req.on('end', () => { try { resolve(d ? JSON.parse(d) : {}); } catch (e) { reject(e); } });
+    req.on('error', reject);
+  });
 }
 function rateLimited(key) {
   const now = Date.now();
@@ -79,15 +81,21 @@ function rateLimited(key) {
   r.count += 1;
   return r.count > RATE_MAX;
 }
-function clientKey(req) {
-  return (req.socket && req.socket.remoteAddress) || 'local';
-}
+function clientKey(req) { return (req.socket && req.socket.remoteAddress) || 'local'; }
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 function log(m) { if (process.env.SPONSORIC_QUIET !== '1') process.stderr.write(`[sponsoric] ${m}\n`); }
 
+// Promisify the callback-based Stripe helpers.
+function stripeTransfer(pid, amount, opts) {
+  return new Promise((resolve, reject) => stripe.transfer(pid, amount, opts, (e, r) => e ? reject(e) : resolve(r)));
+}
+function stripeOnboard(pid) {
+  return new Promise((resolve, reject) => stripe.onboard(pid, (e, r) => e ? reject(e) : resolve(r)));
+}
+
 // Pick an ad: prefer an approved campaign with budget, else a house ad.
-function pickAd(tag) {
-  const camps = store.activeCampaigns();
+async function pickAd(tag) {
+  const camps = await store.activeCampaigns();
   if (camps.length) {
     const c = camps[Math.abs(hash(tag + Math.floor(Date.now() / 20000))) % camps.length];
     return { id: c.id, text: c.text, url: c.url, campaign: true, cpm: c.cpm_usd };
@@ -96,97 +104,90 @@ function pickAd(tag) {
   return Object.assign({ campaign: false, cpm: CPM_USD }, a);
 }
 
-function handler(req, res) {
-  const u = new URL(req.url, `http://localhost:${PORT}`);
-  const p = u.pathname;
+async function handler(req, res) {
+  try {
+    await ensureReady();
+    const u = new URL(req.url, `http://localhost:${PORT}`);
+    const p = u.pathname;
 
-  if (rateLimited(clientKey(req))) return send(res, 429, { error: 'rate_limited' });
+    if (rateLimited(clientKey(req))) return send(res, 429, { error: 'rate_limited' });
 
-  if (p === '/health') return send(res, 200, {
-    ok: true,
-    publisher_share: PUBLISHER_SHARE,
-    // Per-impression payout and gross CPM for every ad level.
-    levels: levels.LEVELS.map((L) => ({
-      id: L.id, key: L.key, label: L.label, cpm_usd: L.cpm,
-      per_impression_usd: store.round(perImpression(L.id))
-    })),
-    per_impression_usd: store.round(perImpression(levels.DEFAULT_LEVEL)), // default tier, for back-compat
-    stripe_live: stripe.live
-  });
+    if (p === '/health') return send(res, 200, {
+      ok: true,
+      store: store.backend,
+      publisher_share: PUBLISHER_SHARE,
+      levels: levels.LEVELS.map((L) => ({
+        id: L.id, key: L.key, label: L.label, cpm_usd: L.cpm,
+        per_impression_usd: store.round(perImpression(L.id))
+      })),
+      per_impression_usd: store.round(perImpression(levels.DEFAULT_LEVEL)),
+      stripe_live: stripe.live
+    });
 
-  if (p === '/ad/next' && req.method === 'GET') {
-    const tag = u.searchParams.get('tag') || 'anon';
-    return send(res, 200, pickAd(tag));
-  }
+    if (p === '/ad/next' && req.method === 'GET') {
+      const tag = u.searchParams.get('tag') || 'anon';
+      return send(res, 200, await pickAd(tag));
+    }
 
-  // POST /session/init — register a new publisher (returns the secret ONCE), or
-  // start a session for an existing one (requires the secret). The secret is the
-  // credential the client stores and sends on every publisher-scoped request.
-  if (p === '/session/init' && req.method === 'POST') {
-    return readBody(req, (err, b) => {
-      if (err) return send(res, 400, { error: 'bad_json' });
+    // POST /session/init — register a new publisher (returns the secret ONCE), or
+    // start a session for an existing one (requires the secret).
+    if (p === '/session/init' && req.method === 'POST') {
+      const b = await readBody(req);
       const pid = b.publisher_id;
       if (!pid) return send(res, 401, { error: 'missing_publisher_id' });
-      const existing = store.getPublisher(pid);
+      const existing = await store.getPublisher(pid);
       if (!existing) {
-        const rec = store.publisher(pid); // creates with a fresh secret
+        const rec = await store.publisher(pid); // creates with a fresh secret
         return send(res, 200, { ok: true, publisher_id: pid, secret: rec.secret, session: 'sess-' + hash(pid + Date.now()), registered: true });
       }
-      const auth = authPublisher(req);
+      const auth = await authPublisher(req);
       if (!auth || auth.id !== pid) return send(res, 401, { error: 'invalid_credentials' });
       return send(res, 200, { ok: true, publisher_id: pid, session: 'sess-' + hash(pid + Date.now()) });
-    });
-  }
+    }
 
-  if (p === '/impression' && req.method === 'POST') {
-    return readBody(req, (err, b) => {
-      if (err) return send(res, 400, { error: 'bad_json' });
-      const auth = authPublisher(req);           // credit only the authenticated publisher
+    if (p === '/impression' && req.method === 'POST') {
+      const b = await readBody(req);
+      const auth = await authPublisher(req);          // credit only the authenticated publisher
       if (!auth) return send(res, 401, { error: 'unauthorized' });
-      const pid = auth.id;                        // ignore any body-supplied publisher_id
+      const pid = auth.id;                             // ignore any body-supplied publisher_id
       if (b.surface !== 'statusline') return send(res, 422, { error: 'unsupported_surface' });
 
-      // Fraud: dedupe replays.
+      // Fraud: atomic dedupe of replays (works across instances).
       const key = `${b.session_tag}:${b.ad_id}`;
-      const now = Date.now();
-      const last = dedupe.get(key);
-      if (last && now - last < DEDUPE_MS) {
-        return send(res, 200, { ok: true, credited_usd: 0, balance_usd: store.publisher(pid).balance_usd, deduped: true });
+      if (await store.dedupeSeen(key, DEDUPE_MS)) {
+        const pub = await store.getPublisher(pid);
+        return send(res, 200, { ok: true, credited_usd: 0, balance_usd: pub ? pub.balance_usd : 0, deduped: true });
       }
       // Fraud: per-session daily cap.
-      if (store.impressionsInWindow(b.session_tag, 86400000) >= MAX_IMPRESSIONS_PER_SESSION_DAY) {
-        return send(res, 200, { ok: true, credited_usd: 0, balance_usd: store.publisher(pid).balance_usd, capped: true });
+      if (await store.impressionsInWindow(b.session_tag, 86400000) >= MAX_IMPRESSIONS_PER_SESSION_DAY) {
+        const pub = await store.getPublisher(pid);
+        return send(res, 200, { ok: true, credited_usd: 0, balance_usd: pub ? pub.balance_usd : 0, capped: true });
       }
-      dedupe.set(key, now);
 
-      // Price by the ad level that rendered. Clamp the client-declared level to a
-      // valid tier (never trust a raw number) and pay from the server's CPM table.
+      // Price by the ad level that rendered — clamp the client-declared level and
+      // pay from the server's CPM table (never trust a raw number).
       const lvl = levels.clampLevel(b.level === undefined ? levels.DEFAULT_LEVEL : b.level);
       const amount = store.round(perImpression(lvl));
-      const pub = store.creditImpression(pid, amount, { ad_id: b.ad_id, session_tag: b.session_tag, level: lvl });
-      // If this ad was a paid campaign, decrement its budget by the gross CPM value at this level.
-      const camp = store.load().campaigns[b.ad_id];
-      if (camp) store.spendCampaign(b.ad_id, store.round(levels.cpmForLevel(lvl) / 1000));
+      const pub = await store.creditImpression(pid, amount, { ad_id: b.ad_id, session_tag: b.session_tag, level: lvl });
+      const camp = await store.getCampaign(b.ad_id);
+      if (camp) await store.spendCampaign(b.ad_id, store.round(levels.cpmForLevel(lvl) / 1000));
       log(`impression pub=${pid} ad=${b.ad_id} L${lvl} +$${amount.toFixed(4)} bal=$${pub.balance_usd.toFixed(4)}`);
       return send(res, 200, { ok: true, credited_usd: amount, level: lvl, balance_usd: pub.balance_usd });
-    });
-  }
+    }
 
-  if (p === '/earnings' && req.method === 'GET') {
-    const auth = authPublisher(req);             // scope strictly to the authenticated publisher
-    if (!auth) return send(res, 401, { error: 'unauthorized' });
-    const pub = auth;                            // query-param publisher_id is ignored for scoping
-    return send(res, 200, {
-      publisher_id: pub.id, impressions: pub.impressions, balance_usd: pub.balance_usd,
-      min_payout_usd: MIN_PAYOUT_USD, payouts: store.payoutsFor(pub.id)
-    });
-  }
+    if (p === '/earnings' && req.method === 'GET') {
+      const auth = await authPublisher(req);           // scope strictly to the authenticated publisher
+      if (!auth) return send(res, 401, { error: 'unauthorized' });
+      return send(res, 200, {
+        publisher_id: auth.id, impressions: auth.impressions, balance_usd: auth.balance_usd,
+        min_payout_usd: MIN_PAYOUT_USD, payouts: await store.payoutsFor(auth.id)
+      });
+    }
 
-  // POST /payout — pay out the publisher's balance via Stripe (real or simulated).
-  if (p === '/payout' && req.method === 'POST') {
-    return readBody(req, (err) => {
-      if (err) return send(res, 400, { error: 'bad_json' });
-      const pub = authPublisher(req);
+    // POST /payout — pay out the publisher's balance via Stripe (real or simulated).
+    if (p === '/payout' && req.method === 'POST') {
+      await readBody(req);
+      const pub = await authPublisher(req);
       if (!pub) return send(res, 401, { error: 'unauthorized' });
       const pid = pub.id;
       if (pub.balance_usd < MIN_PAYOUT_USD) {
@@ -194,22 +195,18 @@ function handler(req, res) {
       }
       const amount = pub.balance_usd;
       // Destination is the publisher's server-side connected account — never from the request body.
-      stripe.transfer(pid, amount, { stripe_account: pub.stripe_account }, (e, result) => {
-        if (e) return send(res, 502, { error: 'payout_failed', detail: e.message });
-        pub.balance_usd = 0;
-        const rec = { pid, amount_usd: amount, ts: Date.now(), transfer: result.id, simulated: !!result.simulated };
-        store.recordPayout(rec);
-        store.persist();
-        log(`payout pub=${pid} $${amount.toFixed(2)} ${result.simulated ? '(simulated)' : ''} -> ${result.id}`);
-        return send(res, 200, { ok: true, paid_usd: amount, transfer: result.id, simulated: !!result.simulated });
-      });
-    });
-  }
+      let result;
+      try { result = await stripeTransfer(pid, amount, { stripe_account: pub.stripe_account }); }
+      catch (e) { return send(res, 502, { error: 'payout_failed', detail: e.message }); }
+      await store.setBalance(pid, 0);
+      await store.recordPayout({ pid, amount_usd: amount, ts: Date.now(), transfer: result.id, simulated: !!result.simulated });
+      log(`payout pub=${pid} $${amount.toFixed(2)} ${result.simulated ? '(simulated)' : ''} -> ${result.id}`);
+      return send(res, 200, { ok: true, paid_usd: amount, transfer: result.id, simulated: !!result.simulated });
+    }
 
-  // POST /campaign — advertiser creates a campaign (admin-gated in this stub).
-  if (p === '/campaign' && req.method === 'POST') {
-    return readBody(req, (err, b) => {
-      if (err) return send(res, 400, { error: 'bad_json' });
+    // POST /campaign — advertiser creates a campaign (admin-gated in this stub).
+    if (p === '/campaign' && req.method === 'POST') {
+      const b = await readBody(req);
       if (!safeEqual(req.headers['x-admin-token'] || '', ADMIN_TOKEN)) return send(res, 403, { error: 'forbidden' });
       if (!b.text || !b.budget_usd) return send(res, 400, { error: 'missing_fields' });
       const c = {
@@ -223,48 +220,50 @@ function handler(req, res) {
         status: b.status === 'approved' ? 'approved' : 'pending', // review gate
         created: Date.now()
       };
-      store.addCampaign(c);
+      await store.addCampaign(c);
       return send(res, 200, { ok: true, campaign: c });
-    });
-  }
+    }
 
-  // GET /campaign/stats — advertiser/admin view of campaign spend and fill (admin-gated).
-  if (p === '/campaign/stats' && req.method === 'GET') {
-    if (!safeEqual(req.headers['x-admin-token'] || '', ADMIN_TOKEN)) return send(res, 403, { error: 'forbidden' });
-    const camps = Object.values(store.load().campaigns).map((c) => ({
-      id: c.id, advertiser: c.advertiser, status: c.status, cpm_usd: c.cpm_usd,
-      budget_usd: c.budget_usd, budget_remaining_usd: c.budget_remaining_usd,
-      spent_usd: store.round(c.budget_usd - c.budget_remaining_usd)
-    }));
-    return send(res, 200, { campaigns: camps });
-  }
+    // GET /campaign/stats — advertiser/admin view of campaign spend and fill (admin-gated).
+    if (p === '/campaign/stats' && req.method === 'GET') {
+      if (!safeEqual(req.headers['x-admin-token'] || '', ADMIN_TOKEN)) return send(res, 403, { error: 'forbidden' });
+      const camps = (await store.allCampaigns()).map((c) => ({
+        id: c.id, advertiser: c.advertiser, status: c.status, cpm_usd: c.cpm_usd,
+        budget_usd: c.budget_usd, budget_remaining_usd: c.budget_remaining_usd,
+        spent_usd: store.round(c.budget_usd - c.budget_remaining_usd)
+      }));
+      return send(res, 200, { campaigns: camps });
+    }
 
-  // POST /connect/onboard — start Stripe Connect onboarding for the authed publisher.
-  // With a live Stripe key this returns a real AccountLink URL; without one it
-  // simulates onboarding and marks a connected account so payouts can be tested.
-  if (p === '/connect/onboard' && req.method === 'POST') {
-    return readBody(req, (err) => {
-      if (err) return send(res, 400, { error: 'bad_json' });
-      const pub = authPublisher(req);
+    // POST /connect/onboard — start Stripe Connect onboarding for the authed publisher.
+    if (p === '/connect/onboard' && req.method === 'POST') {
+      await readBody(req);
+      const pub = await authPublisher(req);
       if (!pub) return send(res, 401, { error: 'unauthorized' });
-      stripe.onboard(pub.id, (e, result) => {
-        if (e) return send(res, 502, { error: 'onboard_failed', detail: e.message });
-        store.setStripeAccount(pub.id, result.account);
-        return send(res, 200, { ok: true, url: result.url, account: result.account, simulated: !!result.simulated });
-      });
-    });
-  }
+      let result;
+      try { result = await stripeOnboard(pub.id); }
+      catch (e) { return send(res, 502, { error: 'onboard_failed', detail: e.message }); }
+      await store.setStripeAccount(pub.id, result.account);
+      return send(res, 200, { ok: true, url: result.url, account: result.account, simulated: !!result.simulated });
+    }
 
-  send(res, 404, { error: 'not_found' });
+    send(res, 404, { error: 'not_found' });
+  } catch (e) {
+    if (/JSON/i.test(e.message || '')) return send(res, 400, { error: 'bad_json' });
+    log(`error ${e.message}`);
+    return send(res, 500, { error: 'internal_error' });
+  }
 }
 
 const server = http.createServer(handler);
 
-process.on('SIGTERM', () => { store.flush(); process.exit(0); });
-process.on('SIGINT', () => { store.flush(); process.exit(0); });
+process.on('SIGTERM', () => { Promise.resolve(store.close && store.close()).finally(() => process.exit(0)); });
+process.on('SIGINT', () => { Promise.resolve(store.close && store.close()).finally(() => process.exit(0)); });
 
 if (require.main === module) {
-  server.listen(PORT, () => log(`backend on http://localhost:${PORT} (levels ${levels.LEVELS.filter(L => L.id > 0).map(L => `L${L.id}=$${L.cpm}`).join('/')} CPM, publisher ${PUBLISHER_SHARE * 100}%, min payout $${MIN_PAYOUT_USD})`));
+  ensureReady().then(() => {
+    server.listen(PORT, () => log(`backend on http://localhost:${PORT} (store=${store.backend}, levels ${levels.LEVELS.filter(L => L.id > 0).map(L => `L${L.id}=$${L.cpm}`).join('/')} CPM, publisher ${PUBLISHER_SHARE * 100}%, min payout $${MIN_PAYOUT_USD})`));
+  }).catch((e) => { log(`failed to start: ${e.message}`); process.exit(1); });
 }
 // Export both the http.Server (for tests/self-host) and the bare handler
 // (for serverless adapters, e.g. api/index.js on Vercel).
