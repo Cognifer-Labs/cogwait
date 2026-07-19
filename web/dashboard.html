@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sponsoric — Earnings</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e7edf3; --mut:#8a97a6; --card:#151a20; --acc:#38bdf8; }
+  @media (prefers-color-scheme: light){ :root{ --bg:#f6f8fa; --fg:#0b0d10; --mut:#5a6673; --card:#fff; --acc:#0284c7; } }
+  *{box-sizing:border-box} body{margin:0;font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 20px}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--mut);margin:0 0 24px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  .card{flex:1;min-width:140px;background:var(--card);border:1px solid rgba(128,128,128,.18);border-radius:12px;padding:16px}
+  .k{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .v{font-size:24px;font-weight:650;margin-top:4px}
+  form{display:flex;gap:8px;margin-bottom:20px}
+  input{flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:transparent;color:var(--fg)}
+  button{padding:10px 16px;border:0;border-radius:8px;background:var(--acc);color:#001018;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--acc);color:var(--acc)}
+  table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:8px;border-bottom:1px solid rgba(128,128,128,.15)}
+  .note{color:var(--mut);font-size:12px;margin-top:16px}
+  #msg{min-height:20px;color:var(--acc);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sponsoric earnings</h1>
+  <p class="sub">Viewable-impression revenue for your publisher id.</p>
+
+  <form id="f">
+    <input id="pid" placeholder="Publisher id" autocomplete="off">
+    <input id="key" placeholder="Publisher key" type="password" autocomplete="off">
+    <button type="submit">Load</button>
+  </form>
+  <p class="note">Your publisher key authenticates these requests. Find it in <code>~/.sponsoric/config.json</code> (<code>publisher_key</code>) after <code>npx sponsoric --register</code>. It is sent only to the API base below, never stored by this page.</p>
+
+  <div class="row">
+    <div class="card"><div class="k">Balance</div><div class="v" id="bal">$0.00</div></div>
+    <div class="card"><div class="k">Impressions</div><div class="v" id="imp">0</div></div>
+    <div class="card"><div class="k">Min payout</div><div class="v" id="min">$—</div></div>
+  </div>
+
+  <button id="pay" class="ghost" style="display:none">Request payout</button>
+  <div id="msg"></div>
+
+  <h3 style="margin-top:24px">Payout history</h3>
+  <table><thead><tr><th>Date</th><th>Amount</th><th>Transfer</th></tr></thead><tbody id="hist"></tbody></table>
+
+  <p class="note">API base: <code id="api"></code>. Set it with <code>?api=</code> in the URL. This page talks only to the Sponsoric backend you point it at; nothing else is sent.</p>
+</div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const API = params.get('api') || 'http://localhost:8787';
+  document.getElementById('api').textContent = API;
+  const $ = (id) => document.getElementById(id);
+  let PID = params.get('pid') || '';
+  let KEY = '';
+  if (PID) $('pid').value = PID;
+  const authHeaders = () => ({ 'authorization': `Publisher ${PID}:${KEY}` });
+
+  async function load(pid) {
+    $('msg').textContent = '';
+    try {
+      const r = await fetch(`${API}/earnings`, { headers: authHeaders() });
+      if (r.status === 401) { $('msg').textContent = 'Unauthorized — check your publisher id and key.'; return; }
+      const d = await r.json();
+      $('bal').textContent = '$' + (d.balance_usd || 0).toFixed(4);
+      $('imp').textContent = d.impressions || 0;
+      $('min').textContent = '$' + (d.min_payout_usd ?? 0);
+      $('pay').style.display = (d.balance_usd >= (d.min_payout_usd || 0) && d.balance_usd > 0) ? 'inline-block' : 'none';
+      renderHistory(d.payouts || []);
+    } catch (e) { $('msg').textContent = 'Could not reach ' + API; }
+  }
+
+  // Build rows with textContent (no innerHTML) so no backend field can inject markup.
+  function renderHistory(payouts) {
+    const tb = $('hist');
+    tb.textContent = '';
+    if (!payouts.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 3; td.style.color = 'var(--mut)'; td.textContent = 'No payouts yet';
+      tr.appendChild(td); tb.appendChild(tr); return;
+    }
+    for (const p of payouts) {
+      const tr = document.createElement('tr');
+      const cells = [
+        new Date(p.ts).toLocaleDateString(),
+        '$' + Number(p.amount_usd || 0).toFixed(2),
+        String(p.transfer || '') + (p.simulated ? ' (sim)' : '')
+      ];
+      for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
+      tb.appendChild(tr);
+    }
+  }
+
+  $('f').addEventListener('submit', (e) => { e.preventDefault(); PID = $('pid').value.trim(); KEY = $('key').value.trim(); if (PID && KEY) load(PID); });
+  $('pay').addEventListener('click', async () => {
+    $('msg').textContent = 'Requesting payout…';
+    try {
+      const r = await fetch(`${API}/payout`, { method:'POST', headers: Object.assign({'content-type':'application/json'}, authHeaders()), body: '{}' });
+      const d = await r.json();
+      $('msg').textContent = d.ok ? `Paid $${d.paid_usd.toFixed(2)}${d.simulated?' (simulated)':''}` : ('Payout failed: ' + (d.error||''));
+      load(PID);
+    } catch (e) { $('msg').textContent = 'Payout request failed'; }
+  });
+
+  // Requires the key too — no auto-load from URL alone (keeps the key out of history).
+</script>
+</body>
+</html>

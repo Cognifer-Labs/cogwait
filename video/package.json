@@ -1,0 +1,23 @@
+{
+  "name": "sponsoric-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion marketing videos for Sponsoric — the only CLI-native wait-time sponsor.",
+  "scripts": {
+    "dev": "remotion studio",
+    "render:cli": "remotion render CliOnly out/sponsoric-cli-only.mp4",
+    "render:levels": "remotion render AdLevels out/sponsoric-ad-levels.mp4",
+    "render:compare": "remotion render Comparison out/sponsoric-comparison.mp4",
+    "render:all": "npm run render:cli && npm run render:levels && npm run render:compare"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.491",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.491"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "typescript": "5.5.4"
+  }
+}

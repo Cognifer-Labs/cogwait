@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "sponsoric",
+  "displayName": "Sponsoric",
+  "version": "0.1.0",
+  "description": "Earn revenue while your AI thinks. One opt-in, clearly labeled sponsor line in the Claude Code status row — never reads your code, files, or prompts.",
+  "author": {
+    "name": "Cognifer Labs LLC",
+    "url": "https://github.com/cognifer-labs"
+  },
+  "homepage": "https://github.com/cognifer-labs/sponsoric",
+  "repository": "https://github.com/cognifer-labs/sponsoric",
+  "license": "MIT",
+  "keywords": ["ads", "monetization", "statusline", "sponsor", "wait-time"],
+  "defaultEnabled": false,
+  "hooks": "./hooks/hooks.json"
+}

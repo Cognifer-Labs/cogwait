@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sponsoric — Your AI thinks. You earn.</title>
+<meta name="description" content="One opt-in, clearly labeled sponsor line in the Claude Code status row. Keep 70%. Never reads your code, files, or prompts.">
+<style>
+  :root{color-scheme:light dark;--bg:#0a0c10;--fg:#e9eef4;--mut:#8b97a6;--card:#141922;--acc:#38bdf8;--line:rgba(128,128,128,.18)}
+  @media (prefers-color-scheme:light){:root{--bg:#fbfcfe;--fg:#0a0c10;--mut:#586472;--card:#fff;--acc:#0284c7}}
+  *{box-sizing:border-box}body{margin:0;font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+  .wrap{max-width:820px;margin:0 auto;padding:0 20px}
+  header{text-align:center;padding:80px 20px 40px}
+  h1{font-size:clamp(32px,6vw,52px);margin:0 0 12px;letter-spacing:-.02em}
+  .tag{color:var(--mut);font-size:clamp(16px,3vw,20px);margin:0 auto 28px;max-width:560px}
+  .term{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:left;max-width:520px;margin:0 auto 24px;color:#e9eef4;overflow-x:auto}
+  .term .c{color:#7ee787}.term .s{color:#38bdf8}.term .d{color:#8b97a6}
+  .cta{display:inline-block;background:var(--acc);color:#001018;font-weight:650;padding:12px 22px;border-radius:10px;text-decoration:none}
+  .cta.ghost{background:transparent;border:1px solid var(--acc);color:var(--acc);margin-left:8px}
+  section{padding:28px 0;border-top:1px solid var(--line)}
+  h2{font-size:22px;margin:0 0 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h3{margin:0 0 6px;font-size:16px}.card p{margin:0;color:var(--mut);font-size:14px}
+  ol{padding-left:20px}ol li{margin:8px 0}
+  code{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:2px 6px;font:13px ui-monospace,Menlo,monospace}
+  .note{color:var(--mut);font-size:13px}
+  footer{padding:40px 20px;text-align:center;color:var(--mut);font-size:13px}
+  a{color:var(--acc)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Your AI thinks.<br>You earn.</h1>
+    <p class="tag">One opt-in, clearly labeled sponsor line in your Claude Code status row while your agent works. Keep 70%. It never reads your code, files, or prompts.</p>
+    <div class="term"><span class="d">[sponsor]</span> <span class="s">Neon — serverless Postgres that scales to zero</span> ›</div>
+    <div class="term"><span class="c">$</span> npx sponsoric</div>
+    <a class="cta" href="https://github.com/cognifer-labs/sponsoric">Get it on GitHub</a>
+    <a class="cta ghost" href="dashboard.html">View earnings</a>
+  </header>
+
+  <section>
+    <h2>Why it's different</h2>
+    <div class="grid">
+      <div class="card"><h3>Actually private</h3><p>Prompts, code, and files never leave your machine. Only a hashed session tag + timestamp. Open source — audit every call.</p></div>
+      <div class="card"><h3>Viewable-only</h3><p>An impression bills only when the line is really on your screen. No phantom views. No manufactured delay.</p></div>
+      <div class="card"><h3>You keep 70%</h3><p>Revenue share paid via Stripe. Pause with one env var, uninstall in one command.</p></div>
+      <div class="card"><h3>Zero interference</h3><p>Runs in the status row with no API-token cost. Network calls are detached with hard timeouts — your terminal never waits.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Install in 30 seconds</h2>
+    <ol>
+      <li>Configure the status line: <code>npx sponsoric</code></li>
+      <li>Set your payout id: <code>export SPONSORIC_PAYOUT_ID="your-id"</code></li>
+      <li>Restart Claude Code and accept the workspace-trust prompt.</li>
+    </ol>
+    <p class="note">Try it with no backend: <code>SPONSORIC_MOCK=1 npx sponsoric</code>. Already have a status line? <code>npx sponsoric --chain</code> keeps both. Check your setup: <code>npx sponsoric --doctor</code>.</p>
+  </section>
+
+  <section>
+    <h2>Honest about the risk</h2>
+    <p class="note">Whether advertisers pay enough for a one-line terminal placement is unproven — that's the real risk, not the tech. We won't promise guaranteed income, and we're not affiliated with Anthropic or Claude.</p>
+  </section>
+</div>
+<footer>
+  MIT © Cognifer Labs LLC · <a href="PRIVACY.md">Privacy</a> · <a href="TERMS.md">Terms</a> · <a href="AD_POLICY.md">Ad policy</a>
+</footer>
+</body>
+</html>
