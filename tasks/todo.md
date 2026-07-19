@@ -59,6 +59,22 @@ Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your account
 - [ ] Beta cohort (10–50 devs), measure fill/earnings/churn — **after deploy**
 - [ ] Lock v1.0.0 + launch — **after beta**
 
+## Phase 7 — Sponsoric Desktop (Tauri control panel) — DONE (v1)
+Unifies the scattered `bin/*` CLI + `web/*` pages into one native GUI. It is a
+**companion**, not the ad surface — the statusline hook stays the money-making
+mechanism (a desktop window can't inject into Claude Code's status row).
+- [x] Scaffold Tauri v2 app in `app/` (vanilla-TS + Vite frontend, Rust backend)
+- [x] Rust commands: read/write `~/.sponsoric/config.json` (0600), detect/patch
+      `~/.claude/settings.json` statusLine (install/uninstall), call the API
+      (earnings/payout/register/connect) with the key held Rust-side
+- [x] UI: Status (doctor checks + install toggle + preview), Earnings (balance/
+      payout/history/Stripe), Ad Level (0–3 picker w/ live sponsor-line preview +
+      CPM/earn), Setup (payout id, register, pause, mock, CLI path), About/privacy
+- [x] Shares the level model + sponsor-line rendering with the CLI (mirrors truth)
+- [x] Compiles clean (cargo check + vite build), `npm run tauri dev` launches
+- [x] Honest-earnings framing (tier CPMs, demand caveat) in the UI
+- [ ] Icons/branding polish + signed `tauri build` .dmg — external (signing cert)
+
 ## Critical path to a real dollar (all external now)
 1. Deploy backend + Postgres (your hosting)
 2. Live Stripe Connect + one paying advertiser (your Stripe, business)
