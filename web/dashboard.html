@@ -47,14 +47,39 @@
   <h3 style="margin-top:24px">Payout history</h3>
   <table><thead><tr><th>Date</th><th>Amount</th><th>Transfer</th></tr></thead><tbody id="hist"></tbody></table>
 
-  <p class="note">API base: <code id="api"></code>. Set it with <code>?api=</code> in the URL. This page talks only to the Sponsoric backend you point it at; nothing else is sent.</p>
+  <p class="note">API base: <code id="api"></code>. A <code>?api=</code> override is honored only for an allowlisted host (the Sponsoric API, this page's own origin, or loopback) so your key can't be redirected to another server. Self-hosting elsewhere? Edit <code>ALLOWED_HOSTS</code> in this file.</p>
 </div>
 <script>
   const params = new URLSearchParams(location.search);
-  const API = params.get('api') || 'http://localhost:8787';
-  document.getElementById('api').textContent = API;
   const $ = (id) => document.getElementById(id);
+
+  // The publisher key is sent as an Authorization header to API. A URL-supplied
+  // `?api=` must therefore never point anywhere the key shouldn't go, or an
+  // attacker link (?api=https://evil.com) would exfiltrate a victim's key.
+  // Only allow https (or http on loopback) to a hardcoded host allowlist —
+  // plus the page's own origin, for self-hosters serving this dashboard.
+  const ALLOWED_HOSTS = ['api.sponsoric.io', 'localhost', '127.0.0.1'];
+  if (location.hostname) ALLOWED_HOSTS.push(location.hostname);
+  function resolveApi(raw) {
+    const fallback = 'http://localhost:8787';
+    if (!raw) return { api: fallback, warn: '' };
+    let u;
+    try { u = new URL(raw, location.href); } catch (_) { return { api: fallback, warn: 'Ignored an invalid ?api= value.' }; }
+    const httpsOk = u.protocol === 'https:';
+    const loopbackOk = u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+    if ((httpsOk || loopbackOk) && ALLOWED_HOSTS.includes(u.hostname)) return { api: u.origin, warn: '' };
+    return { api: fallback, warn: `Ignored untrusted API base "${raw}". Allowed: ${ALLOWED_HOSTS.join(', ')}.` };
+  }
+  const resolved = resolveApi(params.get('api'));
+  const API = resolved.api;                 // origin only — no attacker-controlled path/query
   let PID = params.get('pid') || '';
+
+  // Drop query params from the address bar so ?api=/?pid= can't be silently
+  // overridden later and don't linger in browser history.
+  if (location.search) { try { history.replaceState(null, '', location.pathname); } catch (_) {} }
+
+  document.getElementById('api').textContent = API;
+  if (resolved.warn) $('msg').textContent = resolved.warn;
   let KEY = '';
   if (PID) $('pid').value = PID;
   const authHeaders = () => ({ 'authorization': `Publisher ${PID}:${KEY}` });
