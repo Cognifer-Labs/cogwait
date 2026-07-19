@@ -9,9 +9,18 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Least privilege: this workflow only needs to read the repo and upload artifacts.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-14
+    # Only ever run (and thus only expose signing secrets) on this repo.
+    if: github.repository == 'Cognifer-Labs/sponsoric'
+    # Signing secrets live in the `release` environment — protect it with required
+    # reviewers in repo settings so a release run needs a maintainer to approve.
+    environment: release
     defaults:
       run:
         working-directory: app
@@ -22,17 +31,17 @@ jobs:
         with:
           node-version: 20
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      # macOS runners ship rustup + stable Rust — no third-party action needed.
+      - name: Add Apple targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Install deps
         run: npm ci
 
       - name: Build (sign + notarize if secrets present)
         env:
-          # Set these as repo secrets to sign + notarize. If unset, the build is
-          # unsigned and these env vars are simply empty (tauri skips signing).
+          # Set these as `release`-environment secrets to sign + notarize. If unset,
+          # the build is unsigned and tauri simply skips signing.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
