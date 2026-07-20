@@ -7,11 +7,6 @@ import { Rise, Pop } from "./anim";
 // "You pick the trade" — the tiered ad levels, CPM climbing with prominence.
 export const AdLevels: React.FC = () => (
   <AbsoluteFill style={{ background: COLORS.bg }}>
-    <AbsoluteFill
-      style={{
-        background: `radial-gradient(1100px 600px at 50% 0%, rgba(58,208,230,0.08), transparent 60%), ${COLORS.bg}`,
-      }}
-    />
     <Sequence durationInFrames={60}>
       <Title />
     </Sequence>
@@ -82,7 +77,7 @@ const LevelCard: React.FC<{ lvl: (typeof LEVELS)[number] }> = ({ lvl }) => {
             </div>
             <div style={{ color: COLORS.textDim, fontSize: 26, marginTop: 4 }}>{lvl.desc}</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 34 }}>
-              <span style={{ color: COLORS.cyan, fontSize: 88, fontWeight: 900, fontFamily: FONT_MONO }}>
+              <span style={{ color: COLORS.gold, fontSize: 88, fontWeight: 900, fontFamily: FONT_MONO }}>
                 ${cpm}
               </span>
               <span style={{ color: COLORS.textDim, fontSize: 30 }}>CPM</span>
@@ -101,8 +96,8 @@ const Outro: React.FC = () => (
   <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
     <div style={{ textAlign: "center" }}>
       <Pop>
-        <div style={{ fontFamily: FONT_MONO, color: COLORS.cyan, fontSize: 46 }}>
-          npx sponsoric --level 3
+        <div style={{ fontFamily: FONT_MONO, color: COLORS.blue, fontSize: 46 }}>
+          npx cogwait --level 3
         </div>
       </Pop>
       <Rise delay={12}>

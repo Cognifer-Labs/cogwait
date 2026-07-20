@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "Sponsoric Desktop — control panel for opt-in, labeled sponsor lines in Claude Code."
+description = "Cogwait Desktop — control panel for opt-in, labeled sponsor lines in Claude Code."
 authors = ["Cognifer Labs LLC"]
 license = "MIT"
-repository = "https://github.com/cognifer-labs/sponsoric"
+repository = "https://github.com/cognifer-labs/cogwait"
 edition = "2021"
 
 [profile.release]

@@ -15,7 +15,7 @@ export const Terminal: React.FC<{
         background: COLORS.bgTerminal,
         borderRadius: 14,
         border: `1px solid ${COLORS.border}`,
-        boxShadow: "0 40px 120px rgba(0,0,0,0.55)",
+        boxShadow: "0 16px 0 rgba(10,9,7,0.4)", // hard offset, no blur — zero-glow rule
         overflow: "hidden",
         fontFamily: FONT_MONO,
         ...style,
@@ -28,7 +28,7 @@ export const Terminal: React.FC<{
           alignItems: "center",
           gap: 9,
           padding: "0 18px",
-          background: "#171a22",
+          background: COLORS.bgPanel2,
           borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
@@ -59,7 +59,7 @@ const Dot: React.FC<{ c: string }> = ({ c }) => (
   <div style={{ width: 14, height: 14, borderRadius: 999, background: c }} />
 );
 
-// The Sponsoric sponsor line, rendered per ad level (mirrors bin/statusline.js).
+// The Cogwait sponsor line, rendered per ad level (mirrors bin/statusline.js).
 export const SponsorLine: React.FC<{ level: number; text: string; url: string }> = ({
   level,
   text,
@@ -70,7 +70,7 @@ export const SponsorLine: React.FC<{ level: number; text: string; url: string }>
     return (
       <div>
         <div>
-          <span style={{ color: COLORS.magenta, fontWeight: 700 }}>◆ SPONSOR</span>{" "}
+          <span style={{ color: COLORS.sponsor, fontWeight: 700 }}>◆ SPONSOR</span>{" "}
           <span style={{ color: COLORS.text, fontWeight: 700 }}>{text}</span>
         </div>
         <div style={{ paddingLeft: 128, color: COLORS.yellow }}>{url} ›</div>
@@ -93,3 +93,11 @@ export const SponsorLine: React.FC<{ level: number; text: string; url: string }>
     </div>
   );
 };
+
+// The give-back receipt tease — the emotional turn that separates Cogwait
+// from every incumbent: rendered under the sponsor line, gold (value/give).
+export const GiveBackLine: React.FC<{ pct?: number }> = ({ pct = 20 }) => (
+  <div style={{ color: COLORS.gold, fontWeight: 700 }}>
+    ◇ {pct}% of this → the open source you build on
+  </div>
+);

@@ -16,17 +16,33 @@ const inTauri = typeof (window as any).__TAURI_INTERNALS__ !== "undefined" || ty
 
 const demo: State = {
   payout_id: "demo-dev", has_key: true, level: 2, disabled: false, mock: false,
-  api: "https://api.sponsoric.io", cli_path: "/Users/you/sponsoric/bin/statusline.js",
-  installed: true, config_path: "~/.sponsoric/config.json", settings_path: "~/.claude/settings.json", share: 0.7,
+  api: "https://api.cogwait.io", cli_path: "/Users/you/cogwait/bin/statusline.js",
+  installed: true, config_path: "~/.cogwait/config.json", settings_path: "~/.claude/settings.json", share: 0.7,
 };
 function demoLevels(): LevelsInfo {
   const base = [
     { id: 0, key: "off", label: "Off", cpm: 0, desc: "No sponsor line. Nothing renders, nothing earns." },
     { id: 1, key: "minimal", label: "Minimal", cpm: 8, desc: "One dim, single-line note. The default — barely there." },
     { id: 2, key: "standard", label: "Standard", cpm: 18, desc: "A brighter line with an icon and a call-to-action." },
-    { id: 3, key: "boosted", label: "Boosted", cpm: 35, desc: "A two-line boxed block. The most prominent tier." },
+    { id: 3, key: "boosted", label: "Boosted", cpm: 35, desc: "A two-line boxed block. Prominent, higher-paid." },
+    { id: 4, key: "banner", label: "Banner", cpm: 60, desc: "A full-width inverse-video banner bar — impossible to miss." },
+    { id: 5, key: "takeover", label: "Takeover", cpm: 90, desc: "A bordered multi-line takeover with a blinking marker — the most intrusive tier." },
   ];
   return { share: 0.7, daily_cap: 500, levels: base.map((l) => ({ ...l, per_impression: Math.round((l.cpm / 1000) * 0.7 * 1e6) / 1e6, max_daily: Math.round((l.cpm / 1000) * 0.7 * 500 * 100) / 100 })) };
+}
+// Demo Fund-OSS state for the browser-preview fallback (mirrors the shape of
+// `cogwait::oss_config()` / `run_oss_scan()` on the Rust side).
+const demoOss = { donate_pct: 20, available: true, synced: true, funded_usd: 4.5, balance_usd: 7.4231 };
+function demoReceipt() {
+  return {
+    generated: Date.now(), donate_pct: 20, source: "lockfile", scanned: 214, skipped: 3, truncated: false,
+    totalUsd: 1.48, coverage: 0.18,
+    maintainers: [
+      { url: "https://github.com/sponsors/sindresorhus", name: "sindresorhus", pct: 42.1, usd: 0.62, packages: ["chalk", "execa", "globby"] },
+      { url: "https://opencollective.com/debug", name: "debug", pct: 28.4, usd: 0.42, packages: ["debug"] },
+      { url: "https://tidelift.com/funding/github/npm/lodash", name: "lodash", pct: 29.5, usd: 0.44, packages: ["lodash"] },
+    ],
+  };
 }
 async function mockInvoke(cmd: string, args?: any): Promise<any> {
   switch (cmd) {
@@ -46,6 +62,10 @@ async function mockInvoke(cmd: string, args?: any): Promise<any> {
                 { ts: Date.now() - 86400000 * 23, amount_usd: 10.0, transfer: "tr_1Nf9a2eZvKYlo", simulated: false }] };
     case "request_payout": return { ok: false, error: "below_minimum" };
     case "connect_onboard": return { url: "https://connect.stripe.com/setup/demo", simulated: true };
+    case "ad_preview": { const a = ADS[Math.floor(Date.now() / 20000) % ADS.length]; return { id: "house-demo", text: a.text, url: "https://" + a.url, campaign: false, cpm: 8 }; }
+    case "get_oss_config": return { ...demoOss };
+    case "set_donate_pct": demoOss.donate_pct = Math.max(0, Math.min(100, Number(args?.pct) || 0)); return { donate_pct: demoOss.donate_pct, synced: true };
+    case "run_oss_scan": return demoReceipt();
     default: return {};
   }
 }
@@ -92,6 +112,7 @@ function render() {
   if (tab === "home") return renderHome();
   if (tab === "earnings") return renderEarnings();
   if (tab === "level") return renderLevel();
+  if (tab === "oss") return renderOss();
   if (tab === "setup") return renderSetup();
   if (tab === "about") return renderAbout();
 }
@@ -106,25 +127,65 @@ const ADS = [
 ];
 const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 let adIdx = 0, spinIdx = 0, lastSec = "";
+// the real ad the backend is currently serving, once fetched (null until then)
+let liveAd: { text: string; url: string } | null = null;
 
 function sponsorInner(level: number, ad: { text: string; url: string }): string {
   const cur = `<span class="cursor"></span>`;
   if (level <= 0) return `<span class="spon-dim">— sponsor line off —</span>`;
+  if (level >= 5)
+    return `<div class="spon-box"><div class="spon-box-l"><span class="spon-blink spon-gold">●</span> <b>[sponsor]</b></div><div class="spon-box-l"><b>${esc(ad.text)}</b></div><div class="spon-box-l spon-yellow">▶ https://${esc(ad.url)} ›${cur}</div></div>`;
+  if (level >= 4)
+    return `<div><span class="spon-banner">★ [sponsor] ${esc(ad.text)}</span></div><div style="padding-left:96px" class="spon-yellow">▶ https://${esc(ad.url)} ›${cur}</div>`;
   if (level >= 3)
-    return `<div><span class="spon-mag">◆ SPONSOR</span> <b>${esc(ad.text)}</b></div><div style="padding-left:96px" class="spon-yellow">https://${esc(ad.url)} ›${cur}</div>`;
+    return `<div><span class="spon-gold">◆ SPONSOR</span> <b>${esc(ad.text)}</b></div><div style="padding-left:96px" class="spon-yellow">https://${esc(ad.url)} ›${cur}</div>`;
   if (level >= 2)
     return `<span class="spon-yellow"><b>▸ [sponsor]</b></span> <span class="spon-cyan">${esc(ad.text)}</span> <span class="spon-yellow">›</span>${cur}`;
   return `<span class="spon-cyan">[sponsor]</span> <span class="spon-dim">${esc(ad.text)} ›</span>${cur}`;
 }
-function termBlock(level: number, title = "claude-code — zsh"): string {
+// `live` marks the sponsor line as showing the real backend ad (Status tab); the
+// canned rotation in startLive() skips live lines and a backend poll feeds them.
+function termBlock(level: number, title = "claude-code — zsh", live = false): string {
+  const seed = live && liveAd ? liveAd : ADS[adIdx];
   return `<div class="term"><div class="term-bar">
       <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
       <span class="ttl">${esc(title)}</span><span class="clock">--:--:--</span></div>
     <div class="term-body">
       <div class="prompt"><span class="caret">❯</span> claude "refactor the auth middleware"</div>
       <div class="spon-dim">· <span class="spinner">⠋</span> thinking… reading 12 files</div>
-      <div class="divider"><div class="spon-line" data-level="${level}">${sponsorInner(level, ADS[adIdx])}</div></div>
+      <div class="divider"><div class="spon-line" data-level="${level}"${live ? ' data-live="1"' : ''}>${sponsorInner(level, seed)}</div></div>
     </div></div>`;
+}
+// Pull the real ad the network would serve and paint it into any live sponsor line.
+// Honest labelling: green LIVE tag on success; dim EXAMPLE (with reason) otherwise.
+// Skipped in mock mode — the user opted into local-only demo ads.
+async function refreshLiveAd() {
+  const lines = document.querySelectorAll<HTMLElement>('.spon-line[data-live]');
+  if (!lines.length) return;
+  const tag = document.getElementById("live-tag");
+  const hint = document.getElementById("live-hint");
+  if (S?.mock) {
+    if (tag) { tag.textContent = "MOCK"; tag.className = "live-tag ex"; }
+    if (hint) hint.textContent = "Mock mode — local demo ads, nothing fetched from the network.";
+    return;
+  }
+  try {
+    const ad = await invoke<any>("ad_preview");
+    liveAd = { text: String(ad.text || ""), url: String(ad.url || "").replace(/^https?:\/\//, "") };
+    lines.forEach((el) => (el.innerHTML = sponsorInner(Number(el.dataset.level), liveAd!)));
+    if (!inTauri) {
+      if (tag) { tag.textContent = "DEMO"; tag.className = "live-tag ex"; }
+      if (hint) hint.textContent = "Browser preview — demo ad, not fetched from a live network.";
+    } else {
+      if (tag) { tag.textContent = "● LIVE"; tag.className = "live-tag live"; }
+      if (hint) hint.textContent = ad.campaign
+        ? "A paid advertiser's live placement — the real line the network is serving you now."
+        : "House ad (no paid campaign has budget right now) — the real line the network is serving you now.";
+    }
+  } catch (e) {
+    if (tag) { tag.textContent = "EXAMPLE"; tag.className = "live-tag ex"; }
+    if (hint) hint.textContent = "Can't reach the network — showing an example. Check the API base in Setup.";
+  }
 }
 function startLive() {
   // spinner + clock
@@ -135,9 +196,9 @@ function startLive() {
     const s = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
     if (s !== lastSec) { lastSec = s; document.querySelectorAll<HTMLElement>(".clock").forEach((el) => (el.textContent = s)); }
   }, 95);
-  // ad rotation with a fade
+  // canned rotation with a fade — for illustrative (non-live) preview lines only
   setInterval(() => {
-    const lines = document.querySelectorAll<HTMLElement>(".spon-line");
+    const lines = document.querySelectorAll<HTMLElement>(".spon-line:not([data-live])");
     if (!lines.length) return;
     lines.forEach((el) => el.classList.add("fade"));
     setTimeout(() => {
@@ -145,6 +206,8 @@ function startLive() {
       lines.forEach((el) => { el.innerHTML = sponsorInner(Number(el.dataset.level), ADS[adIdx]); el.classList.remove("fade"); });
     }, 350);
   }, 3900);
+  // live lines track the backend (which rotates its fill on ~20s buckets)
+  setInterval(refreshLiveAd, 20000);
 }
 
 // count a number element up to its target. The final value is guaranteed even if
@@ -172,8 +235,8 @@ async function renderHome() {
   const lvl = L.levels[S.level] || L.levels[1];
   view().innerHTML = `
     <div class="view-head"><h2>Status</h2><p>The sponsor line renders in Claude Code's status row while your agent works. This app keeps it running — here it is, live.</p></div>
-    <div class="card"><h3>Live sponsor line — level ${S.level} · ${esc(lvl.label)}</h3><div class="hint">Exactly what a human sees while the model thinks.</div>${termBlock(S.level)}</div>
-    <div class="card"><h3>Health</h3><div class="hint">The same checks as <code>npx sponsoric --doctor</code>.</div>${rows}</div>
+    <div class="card"><h3>Sponsor line — level ${S.level} · ${esc(lvl.label)} <span id="live-tag" class="live-tag">…</span></h3><div class="hint" id="live-hint">Fetching the ad the network is serving you…</div>${termBlock(S.level, "claude-code — zsh", true)}</div>
+    <div class="card"><h3>Health</h3><div class="hint">The same checks as <code>npx cogwait --doctor</code>.</div>${rows}</div>
     <div class="card">
       <h3>${S.installed ? "Installed" : "Not installed"}</h3>
       <div class="hint">${S.installed ? "Wired into Claude Code. Restart it after changes." : "Adds the sponsor line to <code>~/.claude/settings.json</code> — non-destructive; your existing status line is preserved."}</div>
@@ -186,6 +249,7 @@ async function renderHome() {
   document.getElementById("install")?.addEventListener("click", () => act("install_statusline", { cliPath: S.cli_path || null }, "Installed. Restart Claude Code."));
   document.getElementById("uninstall")?.addEventListener("click", () => act("uninstall_statusline", {}, "Removed the status line."));
   document.getElementById("reveal-cli")?.addEventListener("click", () => msg("m", S.cli_path ? "CLI: " + S.cli_path : "No bin/statusline.js found — set the path in Setup.", "info"));
+  refreshLiveAd();
 }
 
 // ---- EARNINGS ----
@@ -195,13 +259,13 @@ async function renderEarnings() {
     <div class="stat-row">
       <div class="stat"><div class="k">Balance</div><div class="v green" id="bal">$0.00</div></div>
       <div class="stat"><div class="k">Impressions</div><div class="v" id="imp">0</div></div>
-      <div class="stat"><div class="k">Min payout</div><div class="v cyan" id="min">$—</div></div>
+      <div class="stat"><div class="k">Min payout</div><div class="v gold" id="min">$—</div></div>
     </div>
     <div class="card">
       <div class="btn-row">
         <button class="btn ghost" id="reload">Refresh</button>
         <button class="btn" id="pay" disabled>Request payout</button>
-        <button class="btn cyan" id="onboard">Connect Stripe</button>
+        <button class="btn" id="onboard">Connect Stripe</button>
       </div>
       <div class="msg" id="m">${S.has_key || S.mock ? "Loading…" : "Register in Setup first to load earnings."}</div>
     </div>
@@ -262,7 +326,7 @@ function renderLevel() {
     <div class="card"><h3>What it can pay</h3>
       <div class="hint">Illustrative ceiling only — the server caps ${L.daily_cap} viewable impressions per session per day, and real earnings depend on advertiser demand.</div>
       <div class="stat-row">
-        <div class="stat"><div class="k">Gross CPM</div><div class="v cyan" id="s-cpm">$0</div></div>
+        <div class="stat"><div class="k">Gross CPM</div><div class="v gold" id="s-cpm">$0</div></div>
         <div class="stat"><div class="k">You keep / imp</div><div class="v green" id="s-keep">$0</div></div>
         <div class="stat"><div class="k">Max / session / day</div><div class="v" id="s-max">$0</div></div>
       </div>
@@ -280,13 +344,102 @@ function renderLevel() {
     }));
 }
 
+// ---- FUND OSS ----
+let ossState: any = null;
+async function renderOss() {
+  view().innerHTML = `
+    <div class="view-head"><h2>Fund OSS</h2><p>By default, a slice of your earnings funds the open source you build on. Dial it anywhere from 0–100% — 0 keeps everything.</p></div>
+    <div class="card oss-hero" id="oss-status-card"><h3>Give-back</h3><div class="hint">Loading…</div></div>
+    <div class="card"><h3>Local scan</h3>
+      <div class="hint">Scans this project's <code>package-lock.json</code> / <code>node_modules</code> for maintainer <code>funding</code> fields. Nothing about your dependencies ever leaves this machine — only the resulting dollar total does.</div>
+      <div class="btn-row"><button class="btn" id="scan">Run local scan</button></div>
+      <div class="msg" id="scan-msg"></div>
+    </div>
+    <div class="card hidden" id="receipt-card"><h3>Maintainer receipt</h3>
+      <div class="hint" id="receipt-hint"></div>
+      <table class="receipt"><thead><tr><th>Maintainer</th><th>Share</th><th>$</th></tr></thead><tbody id="receipt-body"></tbody></table>
+      <div class="note" style="margin-top:10px">Pooled fund, illustrative snapshot — not a per-maintainer payment guarantee.</div>
+    </div>`;
+  document.getElementById("scan")?.addEventListener("click", runScan);
+  await loadOssConfig();
+}
+
+async function loadOssConfig() {
+  const card = document.getElementById("oss-status-card")!;
+  try {
+    ossState = await invoke<any>("get_oss_config");
+    if (!ossState.available) {
+      card.innerHTML = `<h3>Give-back</h3>
+        <div class="hint">Fund-OSS not available on this backend yet${ossState.synced === false && ossState.donate_pct !== undefined ? ` — showing your locally saved ${ossState.donate_pct}% until it syncs` : ""}.</div>`;
+      return;
+    }
+    const pct = ossState.donate_pct;
+    const bal = Number(ossState.balance_usd) || 0;
+    card.innerHTML = `
+      <h3>Give-back — <span id="donate-pct-label" class="mono">${pct}%</span></h3>
+      <div class="stat-row">
+        <div class="stat"><div class="k">Funded to date</div><div class="v gold" id="oss-funded">$${(Number(ossState.funded_usd) || 0).toFixed(2)}</div></div>
+      </div>
+      <div class="hint">Pooled fund, illustrative snapshot — not a per-maintainer payment guarantee.</div>
+      <input type="range" id="donate-slider" min="0" max="100" step="1" value="${pct}">
+      <div class="split-row">
+        <div class="keep"><div class="lab">You keep</div><div class="amt" id="split-keep">$0.00</div></div>
+        <div class="give"><div class="lab">You give</div><div class="amt" id="split-give">$0.00</div></div>
+      </div>
+      <div class="msg" id="donate-msg"></div>`;
+    const renderSplit = (p: number) => {
+      const give = bal * p / 100, keep = bal - give;
+      document.getElementById("split-keep")!.textContent = "$" + keep.toFixed(2);
+      document.getElementById("split-give")!.textContent = "$" + give.toFixed(2);
+    };
+    renderSplit(pct);
+    const slider = document.getElementById("donate-slider") as HTMLInputElement;
+    let debounce: any = null;
+    slider.addEventListener("input", () => {
+      const p = Number(slider.value);
+      document.getElementById("donate-pct-label")!.textContent = p + "%";
+      renderSplit(p);
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(async () => {
+        const m = document.getElementById("donate-msg")!;
+        m.textContent = "Saving…"; m.className = "msg info";
+        try {
+          const d = await invoke<any>("set_donate_pct", { pct: p });
+          m.textContent = d.synced ? `Give-back set to ${d.donate_pct}%.` : (d.note || "Saved locally.");
+          m.className = d.synced ? "msg ok" : "msg info";
+        } catch (e) { m.textContent = String(e); m.className = "msg err"; }
+      }, 400);
+    });
+  } catch (e) {
+    card.innerHTML = `<h3>Give-back</h3><div class="hint">Fund-OSS not available on this backend yet.</div>`;
+  }
+}
+
+async function runScan() {
+  const m = document.getElementById("scan-msg")!;
+  m.textContent = "Scanning…"; m.className = "msg info";
+  try {
+    const receipt = await invoke<any>("run_oss_scan");
+    m.textContent = `Scanned ${receipt.scanned} packages (${receipt.source}) — ${Math.round((receipt.coverage || 0) * 100)}% declare a funding target.`;
+    m.className = "msg ok";
+    const card = document.getElementById("receipt-card")!;
+    const body = document.getElementById("receipt-body")!;
+    const maintainers = receipt.maintainers || [];
+    body.innerHTML = maintainers.length
+      ? maintainers.map((mm: any) => `<tr><td>${esc(mm.name || mm.url)}</td><td class="pct">${Number(mm.pct).toFixed(1)}%</td><td class="amt">$${Number(mm.usd).toFixed(2)}</td></tr>`).join("")
+      : `<tr><td colspan="3" class="note">No funding targets found among scanned dependencies.</td></tr>`;
+    document.getElementById("receipt-hint")!.textContent = `Generated ${new Date(receipt.generated).toLocaleString()} — saved to ~/.cogwait/oss-receipt.json.`;
+    card.classList.remove("hidden");
+  } catch (e) { m.textContent = String(e); m.className = "msg err"; }
+}
+
 // ---- SETUP ----
 function renderSetup() {
   view().innerHTML = `
-    <div class="view-head"><h2>Setup</h2><p>Your payout identity, backend, and controls. The publisher key is stored owner-only in <code>~/.sponsoric/config.json</code> and sent only to the API base below.</p></div>
+    <div class="view-head"><h2>Setup</h2><p>Your payout identity, backend, and controls. The publisher key is stored owner-only in <code>~/.cogwait/config.json</code> and sent only to the API base below.</p></div>
     <div class="card"><h3>Payout identity</h3>
       <label class="field"><span class="lab">Payout id (your chosen publisher id)</span><input type="text" id="pid" value="${esc(S.payout_id)}" placeholder="your-id" autocomplete="off"></label>
-      <label class="field"><span class="lab">API base</span><input type="text" id="api" value="${esc(S.api)}" placeholder="https://api.sponsoric.io"></label>
+      <label class="field"><span class="lab">API base</span><input type="text" id="api" value="${esc(S.api)}" placeholder="https://api.cogwait.io"></label>
       <div class="btn-row">
         <button class="btn ghost" id="save">Save</button>
         <button class="btn" id="register" ${S.has_key ? "disabled" : ""}>${S.has_key ? "Registered ✓" : "Register (get key)"}</button>
@@ -299,9 +452,9 @@ function renderSetup() {
       <div class="toggle"><div><div class="tlab">Mock mode</div><div class="tsub">Local demo ads, nothing sent to any backend.</div></div>
         <label class="switch"><input type="checkbox" id="mock" ${S.mock ? "checked" : ""}><span class="slider"></span></label></div>
     </div>
-    <div class="card"><h3>Sponsoric CLI path</h3>
+    <div class="card"><h3>Cogwait CLI path</h3>
       <div class="hint">Path to <code>bin/statusline.js</code> the install button wires in. Auto-detected when the repo is nearby.</div>
-      <label class="field"><input type="text" id="cli" value="${esc(S.cli_path)}" placeholder="/path/to/sponsoric/bin/statusline.js"></label>
+      <label class="field"><input type="text" id="cli" value="${esc(S.cli_path)}" placeholder="/path/to/cogwait/bin/statusline.js"></label>
       <button class="btn ghost" id="savecli">Save path</button>
     </div>`;
   document.getElementById("save")?.addEventListener("click", async () => {
@@ -334,7 +487,7 @@ function renderAbout() {
   view().innerHTML = `
     <div class="view-head"><h2>About</h2><p>Honest, opt-in sponsorship for the terminal.</p></div>
     <div class="card"><h3>How it works</h3>
-      <p class="note" style="font-size:13px;line-height:1.75">Sponsoric renders one labeled sponsor line in Claude Code's status row while your agent thinks, and shares ad revenue with you. It never reads your code, files, prompts, or environment — only an anonymized session tag, the ad id, and a timestamp ever leave your machine. An impression counts only when the line is actually rendered to a human.</p>
+      <p class="note" style="font-size:13px;line-height:1.75">Cogwait renders one labeled sponsor line in Claude Code's status row while your agent thinks, and shares ad revenue with you. It never reads your code, files, prompts, or environment — only an anonymized session tag, the ad id, and a timestamp ever leave your machine. An impression counts only when the line is actually rendered to a human.</p>
     </div>
     <div class="card"><h3>The honest part</h3>
       <p class="note" style="font-size:13px;line-height:1.75">Earnings are demand-gated: a real advertiser has to pay for the placement. The CPMs shown here are the tier rates, not a promise. Think coffee money, not a paycheck — and you can pause or uninstall in one click.</p>
@@ -342,8 +495,8 @@ function renderAbout() {
     <div class="card"><h3>Links</h3>
       <div class="btn-row"><button class="btn ghost" id="repo">GitHub</button><button class="btn ghost" id="privacy">Privacy</button></div>
     </div>`;
-  document.getElementById("repo")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/sponsoric"));
-  document.getElementById("privacy")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/sponsoric/blob/main/PRIVACY.md"));
+  document.getElementById("repo")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait"));
+  document.getElementById("privacy")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait/blob/main/PRIVACY.md"));
 }
 
 // ---- helpers ----

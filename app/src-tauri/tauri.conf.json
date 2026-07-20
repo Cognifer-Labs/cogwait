@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Sponsoric",
+  "productName": "Cogwait",
   "version": "0.1.0",
-  "identifier": "io.sponsoric.desktop",
+  "identifier": "io.cogwait.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sponsoric",
+        "title": "Cogwait",
         "width": 980,
         "height": 720,
         "minWidth": 820,
@@ -32,9 +32,9 @@
     "category": "DeveloperTool",
     "copyright": "© Cognifer Labs LLC",
     "shortDescription": "Earn while your AI thinks.",
-    "longDescription": "Sponsoric renders one opt-in, labeled sponsor line in the Claude Code status row while you work, and shares ad revenue with you. This desktop app manages your install, ad level, earnings, and payouts. It never reads your code, files, or prompts.",
+    "longDescription": "Cogwait renders one opt-in, labeled sponsor line in the Claude Code status row while you work, and shares ad revenue with you. This desktop app manages your install, ad level, earnings, and payouts. It never reads your code, files, or prompts.",
     "publisher": "Cognifer Labs LLC",
-    "homepage": "https://github.com/cognifer-labs/sponsoric",
+    "homepage": "https://github.com/cognifer-labs/cogwait",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

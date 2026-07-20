@@ -5,43 +5,119 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cogwait — Earnings</title>
 <style>
-  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e7edf3; --mut:#8a97a6; --card:#151a20; --acc:#38bdf8; --good:#34d399; --line:rgba(128,128,128,.18); }
-  @media (prefers-color-scheme: light){ :root{ --bg:#f6f8fa; --fg:#0b0d10; --mut:#5a6673; --card:#fff; --acc:#0284c7; --good:#059669; --line:rgba(128,128,128,.22); } }
-  *{box-sizing:border-box} body{margin:0;font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
-  .wrap{max-width:680px;margin:0 auto;padding:32px 20px}
-  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--mut);margin:0 0 24px}
-  h3{margin:28px 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+  /* palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values */
+  :root{
+    color-scheme:light dark;
+    --bg:#141310;--panel:#1b1915;--panel-2:#222019;--term:#0e0d0a;
+    --border:#302c24;--border-soft:#26231c;--hair:#2a2720;
+    --fg:#ece7db;--dim:#9c9484;--faint:#615b4d;
+    --gold:#CA9A2B;--gold-deep:#8f6c17;--gold-ink:#1a1204;--gold-wash:#241d0d;
+    --blue:#2B5BCA;--blue-bright:#4a78e6;--blue-deep:#1c3d86;--blue-ink:#eaf0ff;--blue-wash:#131a2c;
+    --green:#5fbf7f;--amber:#d9982f;--red:#e2564d;
+    --t-cyan:#5fd0da;--t-yellow:#e8c15a;
+  }
+  @media (prefers-color-scheme:light){
+    :root{
+      --bg:#faf8f2;--panel:#ffffff;--panel-2:#f3f0e6;--term:#efece2;
+      --border:rgba(70,58,30,.14);--border-soft:rgba(70,58,30,.10);--hair:rgba(70,58,30,.10);
+      --fg:#1a1611;--dim:#6a6252;--faint:#98907e;
+      /* darker than DESIGN.md §3.2's a97d16 — that value is only ~3:1 on the
+         gold-wash hero and fails 4.5:1 for smaller gold text (table.pct,
+         h3 marker); this clears AA with margin on both white panels and
+         gold-wash tint. See ui-redo fixes report. */
+      --gold:#815d12;--gold-deep:#7a5910;--gold-ink:#fff;--gold-wash:#f2e6c8;
+      --blue:#2b5bca;--blue-bright:#1c3d86;--blue-deep:#16307a;--blue-ink:#fff;--blue-wash:#e4eaf9;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 -apple-system,"SF Pro Text","Inter",system-ui,sans-serif;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+  body::after{
+    content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
+    opacity:.028;mix-blend-mode:soft-light;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap{max-width:700px;margin:0 auto;padding:32px 20px}
+  .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace}
+  h1{font-size:21px;font-weight:750;margin:0 0 4px;letter-spacing:-.2px}
+  .sub{color:var(--dim);margin:0 0 24px;font-size:13.5px}
+  h3{
+    margin:28px 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+    display:flex;align-items:center;gap:9px;
+  }
+  h3::before{content:"▍";color:var(--gold);font-size:13px}
   .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-  .card{flex:1;min-width:140px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-  /* The cash-out card is the point of the page — give it the width and a subtle lift. */
-  .card.hero{flex-basis:100%;border-color:color-mix(in srgb, var(--acc) 40%, var(--line));background:linear-gradient(180deg, color-mix(in srgb, var(--acc) 8%, var(--card)), var(--card))}
-  .k{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-  .v{font-size:24px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums}
-  .card.hero .v{font-size:38px;line-height:1.1;margin-top:6px}
-  .v.pos{color:var(--good)}
-  .bar{height:8px;border-radius:99px;background:rgba(128,128,128,.2);overflow:hidden;margin:14px 0 6px}
-  .bar > i{display:block;height:100%;background:var(--acc);width:0;transition:width .5s ease}
-  .barnote{color:var(--mut);font-size:12px}
-  /* Connect: the primary way in — pick your config file, browser asks permission. */
-  .connect{display:block;width:100%;text-align:center;padding:14px;border-radius:10px;background:var(--acc);color:#001018;font-weight:650;cursor:pointer;font-size:15px}
-  .connect:hover{filter:brightness(1.06)}
+  .card{
+    flex:1;min-width:140px;background:var(--panel);border:1px solid var(--border-soft);
+    border-radius:9px;padding:16px;
+  }
+  /* the cash-out card is co-hero with Fund-OSS — a subtle gold lift, not a loud glow */
+  .card.hero{
+    flex-basis:100%;border-color:var(--border);
+    background:linear-gradient(180deg,var(--gold-wash),var(--panel) 60%);
+  }
+  /* Fund-OSS is a give-amount surface → gold wash (give=gold, §3.5), matching
+     the cash-out hero. Blue stays reserved for the action buttons inside it. */
+  .card.oss{
+    flex-basis:100%;border-color:var(--border);
+    background:linear-gradient(180deg,var(--gold-wash),var(--panel) 60%);
+  }
+  .k{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .v{font-size:24px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  .card.hero .v,.card.oss .v{font-size:36px;line-height:1.1;margin-top:6px}
+  .v.pos{color:var(--gold)} /* earnings render gold, §3.5 — was green, AA-safe in both modes */
+  .v.give{color:var(--gold)}
+  .bar{height:8px;border-radius:99px;background:var(--border-soft);overflow:hidden;margin:14px 0 6px}
+  .bar > i{display:block;height:100%;background:var(--blue);width:0;transition:width .5s ease}
+  .bar > i.ready{background:var(--green)}
+  .barnote{color:var(--faint);font-size:12px}
+  /* Connect: the primary way in — pick your config (or receipt) file, browser asks permission */
+  .connect{
+    display:block;width:100%;text-align:center;padding:14px;border-radius:9px;
+    background:var(--blue);color:var(--blue-ink);font-weight:700;cursor:pointer;font-size:15px;
+    box-shadow:0 2px 0 0 var(--blue-deep);transition:transform .06s ease,box-shadow .06s ease;
+  }
+  .connect:active{transform:translateY(2px);box-shadow:none}
   .connect input{display:none}
-  .or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px;margin:14px 0}
-  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
-  details.manual{margin-bottom:8px} details.manual summary{color:var(--mut);font-size:13px;cursor:pointer;list-style:none}
+  .or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px;margin:14px 0}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
+  details.manual{margin-bottom:8px}
+  details.manual summary{color:var(--faint);font-size:13px;cursor:pointer;list-style:none}
   details.manual summary::-webkit-details-marker{display:none}
   details.manual[open] summary{margin-bottom:10px}
   form{display:flex;gap:8px;margin:0 0 4px}
-  input{flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:transparent;color:var(--fg)}
-  button{padding:10px 16px;border:0;border-radius:8px;background:var(--acc);color:#001018;font-weight:600;cursor:pointer}
-  button:disabled{opacity:.45;cursor:not-allowed}
-  button.ghost{background:transparent;border:1px solid var(--acc);color:var(--acc)}
-  button.cashout{margin-top:14px;background:var(--good);color:#00120a;width:100%;font-size:15px;padding:12px}
-  table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:8px;border-bottom:1px solid rgba(128,128,128,.15)}
-  td.amt{font-variant-numeric:tabular-nums}
-  .note{color:var(--mut);font-size:12px;margin-top:16px}
-  #msg{min-height:20px;color:var(--acc);font-size:13px;margin-top:12px}
+  input[type=text],input[type=password]{
+    flex:1;padding:10px 12px;border-radius:7px;border:1px solid var(--border);
+    background:var(--term);color:var(--fg);font:inherit;
+  }
+  input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-wash)}
+  input[type=range]{width:100%;accent-color:var(--gold)}
+  button{
+    font:inherit;font-weight:700;cursor:pointer;border-radius:7px;padding:10px 16px;border:0;
+    background:var(--blue);color:var(--blue-ink);box-shadow:0 2px 0 0 var(--blue-deep);
+    transition:transform .06s ease,box-shadow .06s ease;
+  }
+  button:active{transform:translateY(2px);box-shadow:none}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+  button.ghost{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 1px var(--border)}
+  /* Cash out is an action verb → blue, not the gold value display above it */
+  button.cashout{margin-top:14px;background:var(--blue);color:var(--blue-ink);width:100%;font-size:15px;padding:12px;box-shadow:0 2px 0 0 var(--blue-deep)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px;border-bottom:1px solid var(--hair)}
+  th{color:var(--faint);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em}
+  td.amt,td.pct{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  td.pct{color:var(--gold);font-weight:700}
+  .note{color:var(--faint);font-size:12px;margin-top:16px;line-height:1.55}
+  .disclaimer{color:var(--faint);font-size:11.5px;margin-top:10px;line-height:1.55}
+  #msg{min-height:20px;color:var(--blue-bright);font-size:13px;margin-top:12px}
   .hidden{display:none}
+  .split{display:flex;gap:16px;margin-top:8px}
+  .split > div{flex:1;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:7px;padding:12px}
+  .split .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700}
+  .split .amt{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  .split .keep .amt{color:var(--fg)}
+  .split .give .amt{color:var(--gold)}
+  a{color:var(--blue-bright)}
+  @media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
 </style>
 </head>
 <body>
@@ -50,10 +126,10 @@
   <p class="sub">Viewable-impression revenue for your publisher id.</p>
 
   <label class="connect">
-    Connect — open your config file
+    Connect — open your config or receipt file
     <input id="cfg" type="file" accept=".json,application/json">
   </label>
-  <p class="note">Pick <code>~/.cogwait/config.json</code> (created by <code>npx cogwait --register</code>). Your browser asks permission to open it; the file is read <b>on your machine only</b> — never uploaded. We take just your id and key from it, and hold them in memory for this tab.</p>
+  <p class="note">Pick <code>~/.cogwait/config.json</code> (created by <code>npx cogwait --register</code>) to load earnings, or <code>~/.cogwait/oss-receipt.json</code> (created by <code>npx cogwait --oss</code>) to load your OSS receipt table below. Your browser asks permission to open it; the file is read <b>on your machine only</b> — never uploaded.</p>
 
   <div class="or">or enter manually</div>
   <details class="manual">
@@ -87,8 +163,44 @@
       <div class="card"><div class="k">Avg / day</div><div class="v" id="avg">$—</div></div>
     </div>
 
+    <!-- ---- Fund open source: co-hero with cash-out, per ui-redo DESIGN.md §5.2 ---- -->
+    <div class="row">
+      <div class="card oss" id="oss-card">
+        <div class="k">Fund open source</div>
+        <div id="oss-unavailable" class="hidden">
+          <p class="note" style="margin-top:8px">Fund-OSS not available on this backend yet.</p>
+        </div>
+        <div id="oss-available">
+          <div class="v give" id="oss-funded">$0.00</div>
+          <div class="barnote">funded to date, pooled to the Cogwait OSS fund</div>
+          <div style="margin-top:16px">
+            <label for="donate-slider" class="k" style="display:block;margin-bottom:6px">Give-back — <span id="donate-pct-label" class="mono">20%</span></label>
+            <input type="range" id="donate-slider" min="0" max="100" step="1" value="20">
+          </div>
+          <div class="split">
+            <div class="keep"><div class="lab">You keep</div><div class="amt tnum" id="split-keep">$0.00</div></div>
+            <div class="give"><div class="lab">You give</div><div class="amt tnum" id="split-give">$0.00</div></div>
+          </div>
+          <div class="msg" id="oss-msg" style="min-height:18px;font-size:12px;color:var(--blue-bright);margin-top:8px"></div>
+          <p class="disclaimer">Splits are applied to your balance at payout, server-side. Lowering your give-back to 0% keeps everything.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="receipt-row" style="display:none">
+      <div class="card" style="flex-basis:100%">
+        <div class="k">Maintainer receipt</div>
+        <p class="note" id="receipt-source" style="margin-top:6px"></p>
+        <table id="receipt-table">
+          <thead><tr><th>Maintainer</th><th>Share</th><th>$</th></tr></thead>
+          <tbody id="receipt-body"></tbody>
+        </table>
+        <p class="disclaimer">Pooled fund, illustrative snapshot — not a per-maintainer payment guarantee. Regenerate with <code>npx cogwait --oss</code>, then Connect the receipt file above.</p>
+      </div>
+    </div>
+
     <h3>Payout history</h3>
-    <table><thead><tr><th>Date</th><th>Amount</th><th>Transfer</th></tr></thead><tbody id="hist"></tbody></table>
+    <table><thead><tr><th>Date</th><th>Amount</th><th>Kind</th><th>Transfer</th></tr></thead><tbody id="hist"></tbody></table>
   </div>
 
   <div id="msg"></div>
@@ -146,6 +258,17 @@
 
   const usd = (n) => '$' + Number(n || 0).toFixed(2);
 
+  // ---- Fund-OSS: current known balance + donate_pct, kept for the split preview ----
+  let lastBalance = 0;
+  let donatePctAvailable = false;
+
+  function renderSplitPreview(pct) {
+    const donate = lastBalance * pct / 100;
+    const keep = lastBalance - donate;
+    $('split-keep').textContent = usd(keep);
+    $('split-give').textContent = usd(donate);
+  }
+
   async function load(pid) {
     $('msg').textContent = '';
     try {
@@ -159,6 +282,7 @@
       // Everything below is derived from the earnings payload — no extra endpoints.
       const paid = payouts.reduce((s, p) => s + (Number(p.amount_usd) || 0), 0);
       const lifetime = bal + paid;                          // credited ever = still-here + already-withdrawn
+      lastBalance = bal;
 
       // Cash-out figure reads as dollars-and-cents; keep 4dp only for sub-$1 micro-balances.
       $('bal').textContent = '$' + bal.toFixed(bal >= 1 ? 2 : 4);
@@ -177,13 +301,27 @@
       const ready = bal >= min && bal > 0;
       const pct = min > 0 ? Math.min(100, (bal / min) * 100) : (bal > 0 ? 100 : 0);
       $('prog').style.width = pct.toFixed(1) + '%';
-      $('prog').style.background = ready ? 'var(--good)' : 'var(--acc)';
+      $('prog').classList.toggle('ready', ready);
       $('progn').textContent = ready
         ? `Ready — ${usd(bal)} clears the ${usd(min)} minimum.`
         : `${usd(bal)} of ${usd(min)} minimum (${pct.toFixed(0)}%). Keep coding to reach payout.`;
       const pay = $('pay');
       pay.disabled = !ready;
       pay.textContent = ready ? `Cash out ${usd(bal)}` : `Cash out (min ${usd(min)})`;
+
+      // ---- Fund-OSS card: graceful degradation if this backend predates Phase 8 ----
+      donatePctAvailable = d.donate_pct !== undefined;
+      $('oss-unavailable').classList.toggle('hidden', donatePctAvailable);
+      $('oss-available').classList.toggle('hidden', !donatePctAvailable);
+      if (donatePctAvailable) {
+        const donatePct = Number(d.donate_pct) || 0;
+        $('donate-slider').value = donatePct;
+        $('donate-pct-label').textContent = donatePct + '%';
+        const donations = d.donations || payouts.filter((p) => p.kind === 'donation');
+        const funded = donations.reduce((s, p) => s + (Number(p.amount_usd) || 0), 0);
+        $('oss-funded').textContent = usd(funded);
+        renderSplitPreview(donatePct);
+      }
 
       renderHistory(payouts);
       $('dash').classList.remove('hidden');
@@ -197,7 +335,7 @@
     if (!payouts.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 3; td.style.color = 'var(--mut)'; td.textContent = 'No payouts yet';
+      td.colSpan = 4; td.style.color = 'var(--faint)'; td.textContent = 'No payouts yet';
       tr.appendChild(td); tb.appendChild(tr); return;
     }
     for (const p of payouts) {
@@ -205,6 +343,7 @@
       const cells = [
         new Date(p.ts).toLocaleDateString(),
         '$' + Number(p.amount_usd || 0).toFixed(2),
+        p.kind === 'donation' ? 'give-back' : 'cash-out',
         String(p.transfer || '') + (p.simulated ? ' (sim)' : '')
       ];
       for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
@@ -212,20 +351,51 @@
     }
   }
 
-  // Seamless connect: the user picks their config file, the browser's own file
-  // dialog is the permission prompt. We read it locally (FileReader — no upload),
-  // pull only payout_id + publisher_key, and load. Never persisted to disk here.
+  // ---- Fund-OSS: dial the give-back % (same authed pattern as Cash out) ----
+  let donateDebounce = null;
+  $('donate-slider').addEventListener('input', (e) => {
+    const pct = Number(e.target.value);
+    $('donate-pct-label').textContent = pct + '%';
+    renderSplitPreview(pct);
+    if (donateDebounce) clearTimeout(donateDebounce);
+    donateDebounce = setTimeout(() => postDonatePct(pct), 400);
+  });
+  async function postDonatePct(pct) {
+    if (!PID || !KEY) return;
+    const el = $('oss-msg');
+    el.textContent = 'Saving…';
+    try {
+      const r = await fetch(`${API}/donate/config`, {
+        method: 'POST',
+        headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({ donate_pct: pct })
+      });
+      const d = await r.json();
+      el.textContent = d.ok ? `Give-back set to ${d.donate_pct}%.` : 'Could not save give-back %.';
+    } catch (e) { el.textContent = 'Could not reach ' + API; }
+  }
+
+  // Seamless connect: the user picks their config or receipt file, the browser's
+  // own file dialog is the permission prompt. We read it locally (FileReader —
+  // no upload) and detect which file it is by shape. Never persisted to disk here.
   $('cfg').addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';                       // allow re-picking the same file later
     if (!file) return;
-    if (file.size > 256 * 1024) { $('msg').textContent = 'That file is too large to be a config.json.'; return; }
+    if (file.size > 256 * 1024) { $('msg').textContent = 'That file is too large to be a config or receipt file.'; return; }
     const reader = new FileReader();
     reader.onerror = () => { $('msg').textContent = 'Could not read that file.'; };
     reader.onload = () => {
       let cfg;
       try { cfg = JSON.parse(reader.result); }
-      catch (_) { $('msg').textContent = 'That does not look like a valid config.json.'; return; }
+      catch (_) { $('msg').textContent = 'That does not look like a valid JSON file.'; return; }
+
+      // Shape detection: a receipt (from `npx cogwait --oss`) has `maintainers`;
+      // a config (from `npx cogwait --register`) has `payout_id`/`publisher_key`.
+      if (Array.isArray(cfg.maintainers)) {
+        renderReceipt(cfg);
+        return;
+      }
       const pid = String(cfg.payout_id || cfg.publisher_id || '').trim();
       const key = String(cfg.publisher_key || '').trim();
       if (!pid || !key) { $('msg').textContent = 'No publisher id/key found in that file. Run `npx cogwait --register` first.'; return; }
@@ -240,13 +410,42 @@
     reader.readAsText(file);
   });
 
+  // Render a local `~/.cogwait/oss-receipt.json` (written by `npx cogwait --oss`)
+  // straight from the picked file — never fetched, never uploaded.
+  function renderReceipt(receipt) {
+    const row = $('receipt-row');
+    const body = $('receipt-body');
+    body.textContent = '';
+    const maintainers = receipt.maintainers || [];
+    if (!maintainers.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 3; td.style.color = 'var(--faint)'; td.textContent = 'No funding targets found among scanned dependencies.';
+      tr.appendChild(td); body.appendChild(tr);
+    } else {
+      for (const m of maintainers) {
+        const tr = document.createElement('tr');
+        const cells = [String(m.name || m.url || ''), (Number(m.pct) || 0).toFixed(1) + '%', '$' + (Number(m.usd) || 0).toFixed(2)];
+        cells.forEach((c, i) => { const td = document.createElement('td'); td.className = i === 1 ? 'pct' : (i === 2 ? 'amt' : ''); td.textContent = c; tr.appendChild(td); });
+        body.appendChild(tr);
+      }
+    }
+    const coverage = Math.round((Number(receipt.coverage) || 0) * 100);
+    $('receipt-source').textContent = `Generated ${receipt.generated ? new Date(receipt.generated).toLocaleString() : 'locally'} — ${receipt.scanned || 0} packages scanned, ${coverage}% declare a funding target.`;
+    row.style.display = '';
+    $('dash').classList.remove('hidden');
+    $('msg').textContent = 'Receipt loaded from local file.';
+  }
+
   $('f').addEventListener('submit', (e) => { e.preventDefault(); PID = $('pid').value.trim(); KEY = $('key').value.trim(); if (PID && KEY) load(PID); });
   $('pay').addEventListener('click', async () => {
     $('msg').textContent = 'Requesting payout…';
     try {
       const r = await fetch(`${API}/payout`, { method:'POST', headers: Object.assign({'content-type':'application/json'}, authHeaders()), body: '{}' });
       const d = await r.json();
-      $('msg').textContent = d.ok ? `Paid $${d.paid_usd.toFixed(2)}${d.simulated?' (simulated)':''}` : ('Payout failed: ' + (d.error||''));
+      $('msg').textContent = d.ok
+        ? `Paid $${(d.paid_usd || 0).toFixed(2)}${d.donated_usd ? ` · gave $${d.donated_usd.toFixed(2)}` : ''}${d.simulated?' (simulated)':''}`
+        : ('Payout failed: ' + (d.error||''));
       load(PID);
     } catch (e) { $('msg').textContent = 'Payout request failed'; }
   });

@@ -1,56 +1,76 @@
-// Sponsoric desktop — Tauri command surface. Thin wrappers over `sponsoric`.
-mod sponsoric;
+// Cogwait desktop — Tauri command surface. Thin wrappers over `cogwait`.
+mod cogwait;
 
 use serde_json::Value;
 
 #[tauri::command]
 fn get_state() -> Value {
-    sponsoric::state()
+    cogwait::state()
 }
 
 #[tauri::command]
 fn get_levels() -> Value {
-    sponsoric::levels_json()
+    cogwait::levels_json()
 }
 
 #[tauri::command]
 fn save_config(patch: Value) -> Result<Value, String> {
-    sponsoric::save_config(patch)
+    cogwait::save_config(patch)
 }
 
 #[tauri::command]
 fn install_statusline(cli_path: Option<String>) -> Result<Value, String> {
-    sponsoric::install(cli_path)
+    cogwait::install(cli_path)
 }
 
 #[tauri::command]
 fn uninstall_statusline() -> Result<Value, String> {
-    sponsoric::uninstall()
+    cogwait::uninstall()
 }
 
 #[tauri::command]
 fn doctor() -> Value {
-    sponsoric::doctor()
+    cogwait::doctor()
 }
 
 #[tauri::command]
 async fn register() -> Result<Value, String> {
-    sponsoric::register().await
+    cogwait::register().await
 }
 
 #[tauri::command]
 async fn get_earnings() -> Result<Value, String> {
-    sponsoric::earnings().await
+    cogwait::earnings().await
 }
 
 #[tauri::command]
 async fn request_payout() -> Result<Value, String> {
-    sponsoric::payout().await
+    cogwait::payout().await
 }
 
 #[tauri::command]
 async fn connect_onboard() -> Result<Value, String> {
-    sponsoric::connect_onboard().await
+    cogwait::connect_onboard().await
+}
+
+#[tauri::command]
+async fn ad_preview() -> Result<Value, String> {
+    cogwait::ad_preview().await
+}
+
+#[tauri::command]
+async fn get_oss_config() -> Result<Value, String> {
+    cogwait::oss_config().await
+}
+
+#[tauri::command]
+async fn set_donate_pct(pct: f64) -> Result<Value, String> {
+    cogwait::set_donate_pct(pct).await
+}
+
+#[tauri::command]
+async fn run_oss_scan() -> Result<Value, String> {
+    cogwait::run_oss_scan().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -67,7 +87,11 @@ pub fn run() {
             register,
             get_earnings,
             request_payout,
-            connect_onboard
+            connect_onboard,
+            ad_preview,
+            get_oss_config,
+            set_donate_pct,
+            run_oss_scan
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

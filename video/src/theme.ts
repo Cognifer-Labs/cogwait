@@ -1,20 +1,29 @@
-// Shared visual language for all Sponsoric videos — a dark terminal aesthetic
-// with a single magenta/cyan accent. System fonts only (no network fetch at render).
+// Shared visual language for all Cogwait videos — a dark terminal aesthetic
+// with the gold+blue brand system. System fonts only (no network fetch at render).
+// palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values
 
 export const COLORS = {
-  bg: "#0a0b0f",
-  bgPanel: "#12141b",
-  bgTerminal: "#0d1017",
-  border: "#232734",
-  text: "#e7e9ee",
-  textDim: "#8b90a0",
-  textFaint: "#565c6e",
-  cyan: "#3ad0e6",
-  magenta: "#e64ec9",
-  yellow: "#f5c451",
-  green: "#4ade80",
-  red: "#f2607d",
-  sponsor: "#e64ec9",
+  bg: "#141310",
+  bgPanel: "#1b1915",
+  bgPanel2: "#222019", // warm chrome tint — replaces stray cold blue-grey literals
+  bgTerminal: "#0e0d0a",
+  border: "#302c24",
+  overlayInk: "rgba(20,19,16,0.55)", // warm-ink stamp overlay (was a cold rgba(10,11,15,...))
+  text: "#ece7db",
+  textDim: "#9c9484",
+  textFaint: "#615b4d",
+  // terminal-internal ANSI-adjacent set — exempt from the gold/blue repoint,
+  // same rule as app/src/styles.css (§3.4 item 9: "the sponsor/terminal
+  // preview is the only place ANSI color lives").
+  cyan: "#5fd0da",
+  yellow: "#e8c15a",
+  green: "#5fbf7f",
+  red: "#e2564d",
+  // PRIMARY — gold: value, earnings, give-back, the sponsor word itself.
+  gold: "#CA9A2B",
+  // SECONDARY — blue: action/"do it" verbs (the `npx cogwait` CTA block).
+  blue: "#2B5BCA",
+  sponsor: "#CA9A2B",
 };
 
 export const FONT_MONO =
@@ -24,7 +33,7 @@ export const FONT_SANS =
 
 export const FPS = 30;
 
-// The four incumbents Sponsoric is positioned against.
+// The four incumbents Cogwait is positioned against.
 export const COMPETITORS = [
   { name: "IdleDev", surface: "browser tab", share: "65%" },
   { name: "idlepay", surface: "web dashboard", share: "50%" },

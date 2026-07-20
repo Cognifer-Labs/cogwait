@@ -10,15 +10,11 @@ const ROWS: { label: string; sponsoric: string; incumbent: string; win: boolean 
   { label: "Never reads code / prompts", sponsoric: "hashed tag only", incumbent: "varies", win: true },
   { label: "You pick the ad level & CPM", sponsoric: "3 tiers", incumbent: "fixed", win: true },
   { label: "Dev revenue share", sponsoric: "70%", incumbent: "50–70%", win: true },
+  { label: "Funds open source out of the box", sponsoric: "yes, default 20%", incumbent: "no", win: true },
 ];
 
 export const Comparison: React.FC = () => (
   <AbsoluteFill style={{ background: COLORS.bg }}>
-    <AbsoluteFill
-      style={{
-        background: `radial-gradient(1200px 700px at 70% 20%, rgba(230,78,201,0.09), transparent 60%), ${COLORS.bg}`,
-      }}
-    />
     <Sequence durationInFrames={55}>
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
         <Rise>
@@ -43,7 +39,7 @@ const Table: React.FC = () => {
         <Pop>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 360px 360px", alignItems: "center", paddingBottom: 18 }}>
             <div />
-            <HeadCell accent>Sponsoric</HeadCell>
+            <HeadCell accent>Cogwait</HeadCell>
             <HeadCell>Incumbents</HeadCell>
           </div>
         </Pop>
@@ -84,7 +80,7 @@ const HeadCell: React.FC<{ children: React.ReactNode; accent?: boolean }> = ({ c
       fontFamily: FONT_MONO,
       fontSize: 34,
       fontWeight: 800,
-      color: accent ? COLORS.magenta : COLORS.textDim,
+      color: accent ? COLORS.gold : COLORS.textDim,
     }}
   >
     {children}

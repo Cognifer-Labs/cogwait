@@ -1,21 +1,23 @@
 import React from "react";
 import { AbsoluteFill, Sequence, useCurrentFrame, interpolate } from "remotion";
 import { COLORS, FONT_MONO, FONT_SANS, COMPETITORS } from "./theme";
-import { Terminal, SponsorLine } from "./Terminal";
+import { Terminal, SponsorLine, GiveBackLine } from "./Terminal";
 import { Rise, Pop } from "./anim";
 
 // Hero video: the only wait-time monetizer that renders inside the CLI.
+// Length budget (ui-redo DESIGN.md §9 open item): the new Fund-OSS reveal
+// beat in CliReveal needs room, so Competitors is trimmed by the same 30
+// frames rather than extending the total 420-frame runtime.
 export const CliOnly: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLORS.bg }}>
-      <Bg />
       <Sequence durationInFrames={95}>
         <Intro />
       </Sequence>
-      <Sequence from={95} durationInFrames={120}>
+      <Sequence from={95} durationInFrames={90}>
         <Competitors />
       </Sequence>
-      <Sequence from={215} durationInFrames={130}>
+      <Sequence from={185} durationInFrames={160}>
         <CliReveal />
       </Sequence>
       <Sequence from={345} durationInFrames={75}>
@@ -24,14 +26,6 @@ export const CliOnly: React.FC = () => {
     </AbsoluteFill>
   );
 };
-
-const Bg: React.FC = () => (
-  <AbsoluteFill
-    style={{
-      background: `radial-gradient(1200px 700px at 50% 12%, rgba(230,78,201,0.10), transparent 60%), ${COLORS.bg}`,
-    }}
-  />
-);
 
 const Center: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", padding: 90 }}>
@@ -103,7 +97,7 @@ const Competitors: React.FC = () => {
                   <div
                     style={{
                       height: 34,
-                      background: "#1b1e27",
+                      background: COLORS.bgPanel2,
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
@@ -126,7 +120,7 @@ const Competitors: React.FC = () => {
                     style={{
                       position: "absolute",
                       inset: 0,
-                      background: "rgba(10,11,15,0.55)",
+                      background: COLORS.overlayInk,
                       opacity: stamp,
                       display: "flex",
                       alignItems: "center",
@@ -170,20 +164,20 @@ const CliReveal: React.FC = () => (
         <div
           style={{
             fontFamily: FONT_MONO,
-            color: COLORS.magenta,
+            color: COLORS.gold,
             fontSize: 30,
             letterSpacing: 2,
             marginBottom: 26,
             fontWeight: 700,
           }}
         >
-          SPONSORIC — NATIVE TO THE CLI
+          COGWAIT — NATIVE TO THE CLI
         </div>
       </Pop>
       <Rise delay={10} dur={22}>
         <Terminal width={1180}>
           <div style={{ color: COLORS.green }}>
-            <span style={{ color: COLORS.magenta }}>❯</span> claude "refactor the auth middleware"
+            <span style={{ color: COLORS.gold }}>❯</span> claude "refactor the auth middleware"
           </div>
           <div style={{ color: COLORS.textDim, marginTop: 6 }}>· thinking… reading 12 files</div>
           <div
@@ -194,12 +188,18 @@ const CliReveal: React.FC = () => (
             }}
           >
             <SponsorLine level={3} text="Neon — serverless Postgres that scales to zero" url="https://neon.tech" />
+            {/* Fund-OSS beat (§5.4): the give-back receipt tease reveals after
+                the sponsor line settles — the emotional turn that separates
+                Cogwait from every incumbent in the Comparison scene. */}
+            <Rise delay={90} dur={20} style={{ marginTop: 14 }}>
+              <GiveBackLine pct={20} />
+            </Rise>
           </div>
         </Terminal>
       </Rise>
       <Rise delay={40}>
         <div style={{ fontFamily: FONT_SANS, color: COLORS.text, fontSize: 40, marginTop: 44, textAlign: "center" }}>
-          The <b style={{ color: COLORS.magenta }}>only</b> wait-time sponsor that renders
+          The <b style={{ color: COLORS.gold }}>only</b> wait-time sponsor that renders
           <br />where you actually work — the status line.
         </div>
       </Rise>
@@ -212,19 +212,19 @@ const Closing: React.FC = () => (
     <div style={{ textAlign: "center" }}>
       <Pop>
         <div style={{ fontFamily: FONT_SANS, color: COLORS.text, fontSize: 96, fontWeight: 900 }}>
-          Sponsoric
+          Cogwait
         </div>
       </Pop>
       <Rise delay={12}>
         <div style={{ fontFamily: FONT_SANS, color: COLORS.textDim, fontSize: 42, marginTop: 12 }}>
-          Your AI thinks. You earn — in the terminal.
+          Your AI thinks. Open source gets paid.
         </div>
       </Rise>
       <Rise delay={24}>
         <div
           style={{
             fontFamily: FONT_MONO,
-            color: COLORS.cyan,
+            color: COLORS.blue,
             fontSize: 34,
             marginTop: 40,
             background: COLORS.bgTerminal,
@@ -234,7 +234,7 @@ const Closing: React.FC = () => (
             display: "inline-block",
           }}
         >
-          npx sponsoric
+          npx cogwait
         </div>
       </Rise>
     </div>
@@ -242,5 +242,5 @@ const Closing: React.FC = () => (
 );
 
 const Chip: React.FC = () => (
-  <div style={{ width: 9, height: 9, borderRadius: 999, background: "#3a3f4d" }} />
+  <div style={{ width: 9, height: 9, borderRadius: 999, background: COLORS.border }} />
 );
