@@ -1,4 +1,4 @@
-# Deploying the Sponsoric backend
+# Deploying the Cogwait backend
 
 The backend in `server/` is a Node HTTP server that **auto-selects its store**:
 a file-backed JSON store for single-node self-host/local, or **Postgres** the
@@ -11,7 +11,7 @@ horizontally scaled instances can't double-bill.
 Single node, file store (no database):
 
 ```bash
-SPONSORIC_ADMIN_TOKEN="$(openssl rand -hex 16)" \
+COGWAIT_ADMIN_TOKEN="$(openssl rand -hex 16)" \
 STRIPE_SECRET_KEY=sk_live_... \
 PORT=8787 \
 node server/index.js
@@ -22,8 +22,8 @@ Production, Postgres-backed (schema is created automatically on first start;
 dependency — `npm install` pulls it:
 
 ```bash
-DATABASE_URL="postgres://user:pass@host:5432/sponsoric?sslmode=require" \
-SPONSORIC_ADMIN_TOKEN="$(openssl rand -hex 16)" \
+DATABASE_URL="postgres://user:pass@host:5432/cogwait?sslmode=require" \
+COGWAIT_ADMIN_TOKEN="$(openssl rand -hex 16)" \
 STRIPE_SECRET_KEY=sk_live_... \
 node server/index.js
 # → logs: backend on http://localhost:8787 (store=postgres, ...)
@@ -32,8 +32,8 @@ node server/index.js
 Docker:
 
 ```bash
-docker build -t sponsoric-backend .
-docker run -p 8787:8787 --env-file .env sponsoric-backend
+docker build -t cogwait-backend .
+docker run -p 8787:8787 --env-file .env cogwait-backend
 ```
 
 ## 2. Production swaps
@@ -41,7 +41,7 @@ docker run -p 8787:8787 --env-file .env sponsoric-backend
 | Concern | PoC (now) | Production |
 | --- | --- | --- |
 | Store | JSON file (`store-json.js`, default) | **Postgres (`store-pg.js`) — done; set `DATABASE_URL`.** Same async interface, enforced by `test/store-interface.js` |
-| Payouts | `lib/stripe.js` (simulated when no key) | Stripe Connect: `POST /connect/onboard` creates an AccountLink and stores the connected-account id; `POST /payout` transfers to it. Set `STRIPE_SECRET_KEY` + `SPONSORIC_CONNECT_RETURN`/`_REFRESH` URLs |
+| Payouts | `lib/stripe.js` (simulated when no key) | Stripe Connect: `POST /connect/onboard` creates an AccountLink and stores the connected-account id; `POST /payout` transfers to it. Set `STRIPE_SECRET_KEY` + `COGWAIT_CONNECT_RETURN`/`_REFRESH` URLs |
 | Ad serving | in-memory house ads + campaigns | real campaign DB, targeting, budget pacing, review queue |
 | Fraud | dedupe + per-session daily cap + rate limit | + IP reputation, publisher velocity anomaly detection, viewability sampling |
 | Auth | `Authorization: Publisher <id>` + admin token | signed publisher tokens (rotate), scoped advertiser keys |
@@ -66,11 +66,11 @@ a shared store (Redis/Postgres) once you run more than one instance.
 | Var | Default | Meaning |
 | --- | --- | --- |
 | `PORT` | 8787 | Listen port |
-| `SPONSORIC_CPM` | 2 | Advertiser price per 1000 views (USD) |
-| `SPONSORIC_SHARE` | 0.7 | Publisher revenue share (0–1) |
-| `SPONSORIC_MIN_PAYOUT` | 10 | Minimum balance before payout (USD) |
-| `SPONSORIC_ADMIN_TOKEN` | — (required) | `x-admin-token` for campaign endpoints; refuses to start if unset/`dev-admin` |
-| `SPONSORIC_DATA_DIR` | `~/.sponsoric/server` | JSON store location (ignored when `DATABASE_URL` is set) |
+| `COGWAIT_CPM` | 2 | Advertiser price per 1000 views (USD) |
+| `COGWAIT_SHARE` | 0.7 | Publisher revenue share (0–1) |
+| `COGWAIT_MIN_PAYOUT` | 10 | Minimum balance before payout (USD) |
+| `COGWAIT_ADMIN_TOKEN` | — (required) | `x-admin-token` for campaign endpoints; refuses to start if unset/`dev-admin` |
+| `COGWAIT_DATA_DIR` | `~/.cogwait/server` | JSON store location (ignored when `DATABASE_URL` is set) |
 | `DATABASE_URL` | — | Postgres connection string; when set, the store switches to Postgres |
 | `PGSSL` | verify | `disable` (no TLS, local), `no-verify` (encrypt, skip verify — MITM risk) |
 | `PGSSLROOTCERT` | — | Path to a CA cert to verify the DB's TLS (preferred for hosted PG) |

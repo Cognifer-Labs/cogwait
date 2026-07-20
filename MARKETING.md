@@ -1,4 +1,4 @@
-# Sponsoric — Marketing Plan
+# Cogwait — Marketing Plan
 
 _Owner: Cognifer Labs · Draft v1 · Honest framing only: opt-in, labeled, no
 code/prompt reading, viewable-only billing, never "guaranteed passive income."_
@@ -30,11 +30,11 @@ the pitch is "free money you'd otherwise waste + I can turn it off," not riches.
 
 **Advertiser (demand):** dev-tool companies (databases, observability, CI, IDEs,
 API products) that already buy newsletter/podcast sponsorships to reach
-engineers. Sponsoric offers *provably-viewed*, brand-safe, in-context placement.
+engineers. Cogwait offers *provably-viewed*, brand-safe, in-context placement.
 
 ## 4. Positioning vs. incumbents
 
-| Axis | Sponsoric wedge |
+| Axis | Cogwait wedge |
 | --- | --- |
 | **Trust** | Fully open-source bridge; audit every network call. Incumbents are mostly closed. |
 | **Privacy proof** | Only a hashed session tag + timestamp leave the machine — documented and testable, not just claimed. |
@@ -67,28 +67,28 @@ the earnings claim with the honest demand caveat (§10).
    TLDR, Console, Changelog.
 6. **GitHub / marketplace discovery** — README SEO, topics, the community plugin
    registry listing itself is a channel.
-7. **Content/SEO** — comparison pages ("Sponsoric vs idlepay/IdleDev"), "is
+7. **Content/SEO** — comparison pages ("Cogwait vs idlepay/IdleDev"), "is
    monetizing AI wait time a scam?" (answer honestly), privacy deep-dive.
 
 ## 7. Funnel & growth loops
 
-**Funnel:** Discover (HN/X/PH) → Read privacy proof → `npx sponsoric` (mock mode,
+**Funnel:** Discover (HN/X/PH) → Read privacy proof → `npx cogwait` (mock mode,
 zero commitment) → register + set payout → first impression → first payout →
 advocate.
 
-**Activation wedge:** `SPONSORIC_MOCK=1` lets a skeptic *see it work* with nothing
+**Activation wedge:** `COGWAIT_MOCK=1` lets a skeptic *see it work* with nothing
 sent. Removing the "trust me" leap is the single highest-leverage growth move.
 
 **Loops:**
 - **Proof loop:** open-source + audit posts → trust → installs → more audits/PRs → more trust.
 - **Two-sided loop:** more publishers → more viewable inventory → advertisers pay → higher CPM → higher earnings → more publishers.
 - **Referral:** publisher referral bonus (small % of referred earnings for N days) — build after payout rails are live.
-- **Meta loop:** the sponsor line itself can occasionally house-promote Sponsoric ("earning via Sponsoric — get it: …").
+- **Meta loop:** the sponsor line itself can occasionally house-promote Cogwait ("earning via Cogwait — get it: …").
 
 ## 8. 0–90 day launch sequence
 
 **Pre-launch (wk 0–2):** public repo + LICENSE + privacy doc; landing page live;
-`npx sponsoric` works from a clean machine; 5–10 private beta devs; line up 1–2
+`npx cogwait` works from a clean machine; 5–10 private beta devs; line up 1–2
 design-partner advertisers (even at cost/free) so the network isn't empty.
 
 **Launch (wk 3–4):** Show HN (privacy-first) → same-day PH → X thread with a
@@ -103,7 +103,7 @@ referral program; publish an anonymized aggregate "what devs earned" report.
 
 | Metric | Target |
 | --- | --- |
-| Installs (`npx sponsoric`) | 2,000 |
+| Installs (`npx cogwait`) | 2,000 |
 | Activation (registered + ≥1 impression) | 40% of installs |
 | D30 retention (still enabled) | 50% |
 | Paying advertisers | 3–5 |

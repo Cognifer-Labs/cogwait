@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// sponsoric --doctor — diagnose a Sponsoric install.
+// cogwait --doctor — diagnose a Cogwait install.
 // Checks: settings.json statusLine wiring, payout id, backend connectivity,
 // backoff state. Read-only; prints a report and a non-zero exit on hard errors.
 
@@ -15,24 +15,24 @@ const ok = (m) => console.log('  ✓', m);
 const warn = (m) => console.log('  ⚠', m);
 const bad = (m) => { console.log('  ✗', m); problems++; };
 
-console.log('Sponsoric doctor\n');
+console.log('Cogwait doctor\n');
 
 // 1. statusLine wired?
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(SETTINGS, 'utf8')); } catch (_) {}
 const cmd = settings.statusLine && settings.statusLine.command;
 if (cmd && String(cmd).includes('statusline.js')) ok(`statusLine configured in ${SETTINGS}`);
-else bad(`statusLine not configured — run: npx sponsoric`);
+else bad(`statusLine not configured — run: npx cogwait`);
 
 // 2. payout id?
 if (client.PAYOUT_ID) ok(`payout id set (${client.PAYOUT_ID})`);
 else if (client.MOCK) warn('no payout id, but MOCK mode is on (demo only, no earnings)');
-else bad('no payout id — set SPONSORIC_PAYOUT_ID or add "payout_id" to ~/.sponsoric/config.json');
+else bad('no payout id — set COGWAIT_PAYOUT_ID or add "payout_id" to ~/.cogwait/config.json');
 
 // 3. disabled / ad level?
-if (client.DISABLED) warn('SPONSORIC_DISABLED=1 — ads are paused');
+if (client.DISABLED) warn('COGWAIT_DISABLED=1 — ads are paused');
 const levels = require('../lib/levels');
-if (client.LEVEL === 0) warn('ad level 0 (Off) — nothing renders, nothing earns; raise with `npx sponsoric --level 1`');
+if (client.LEVEL === 0) warn('ad level 0 (Off) — nothing renders, nothing earns; raise with `npx cogwait --level 1`');
 else ok(`ad level ${client.LEVEL} (${levels.level(client.LEVEL).label}) — $${levels.cpmForLevel(client.LEVEL)} CPM tier`);
 
 // 4. backoff state?

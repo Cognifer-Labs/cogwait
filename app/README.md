@@ -1,13 +1,13 @@
-# Sponsoric Desktop
+# Cogwait Desktop
 
-A native control panel that ties the whole Sponsoric toolchain into one window —
+A native control panel that ties the whole Cogwait toolchain into one window —
 built with Tauri (Rust) + a vanilla-TS frontend.
 
 It is a **companion**, not the ad surface. The sponsor line renders in Claude
 Code's status row via the CLI status-line hook; a desktop window can't inject
 there. This app manages everything around it:
 
-- **Status** — health checks (same as `npx sponsoric --doctor`), a live preview
+- **Status** — health checks (same as `npx cogwait --doctor`), a live preview
   of the sponsor line, and one-click install / uninstall of the status line.
 - **Earnings** — balance, impressions, payout history, request payout, Connect
   Stripe. The publisher key is held Rust-side and sent only to your API base.
@@ -16,7 +16,7 @@ there. This app manages everything around it:
 - **Setup** — payout id, API base, register (get key), pause, mock mode, CLI path.
 - **About** — the honest framing: earnings are demand-gated, coffee money.
 
-Everything reads/writes the same files the CLI uses (`~/.sponsoric/config.json`
+Everything reads/writes the same files the CLI uses (`~/.cogwait/config.json`
 owner-only 0600, `~/.claude/settings.json`) and mirrors `lib/levels.js` and
 `bin/statusline.js`, so the GUI and CLI stay in sync.
 
@@ -45,9 +45,9 @@ at that path in **Setup** if auto-detection can't find it.
 
 ## Production notes
 
-- API base defaults to `https://api.sponsoric.io`; override in **Setup** (or via
-  the CLI's `SPONSORIC_API`) to point at a local/self-hosted backend.
-- The publisher key is stored owner-only in `~/.sponsoric/config.json` and only
+- API base defaults to `https://api.cogwait.io`; override in **Setup** (or via
+  the CLI's `COGWAIT_API`) to point at a local/self-hosted backend.
+- The publisher key is stored owner-only in `~/.cogwait/config.json` and only
   ever sent, from the Rust side, to that configured base.
 - A strict CSP is set in `tauri.conf.json`; the frontend never makes network
   calls directly — all backend traffic goes through Rust commands.

@@ -1,13 +1,13 @@
 {
-  "name": "sponsoric-video",
+  "name": "cogwait-video",
   "version": "1.0.0",
   "private": true,
-  "description": "Remotion marketing videos for Sponsoric — the only CLI-native wait-time sponsor.",
+  "description": "Remotion marketing videos for Cogwait — the only CLI-native wait-time sponsor.",
   "scripts": {
     "dev": "remotion studio",
-    "render:cli": "remotion render CliOnly out/sponsoric-cli-only.mp4",
-    "render:levels": "remotion render AdLevels out/sponsoric-ad-levels.mp4",
-    "render:compare": "remotion render Comparison out/sponsoric-comparison.mp4",
+    "render:cli": "remotion render CliOnly out/cogwait-cli-only.mp4",
+    "render:levels": "remotion render AdLevels out/cogwait-ad-levels.mp4",
+    "render:compare": "remotion render Comparison out/cogwait-comparison.mp4",
     "render:all": "npm run render:cli && npm run render:levels && npm run render:compare"
   },
   "dependencies": {

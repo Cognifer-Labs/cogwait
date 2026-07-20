@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "cognifer-labs",
-  "description": "Cognifer Labs plugins for Claude Code — starting with Sponsoric, honest opt-in wait-time sponsorship.",
+  "description": "Cognifer Labs plugins for Claude Code — starting with Cogwait, honest opt-in wait-time sponsorship.",
   "owner": {
     "name": "Cognifer Labs LLC",
     "url": "https://github.com/cognifer-labs"
   },
   "plugins": [
     {
-      "name": "sponsoric",
+      "name": "cogwait",
       "source": "./",
       "description": "Earn revenue while your AI thinks — one opt-in, clearly labeled sponsor line in the Claude Code status row. Never reads your code, files, or prompts.",
       "version": "0.1.0",

@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 'use strict';
-// sponsoric --register — obtain a per-publisher secret from the backend and
-// store it in ~/.sponsoric/config.json so impressions can be authenticated.
-// Requires SPONSORIC_PAYOUT_ID (and SPONSORIC_API if self-hosting).
+// cogwait --register — obtain a per-publisher secret from the backend and
+// store it in ~/.cogwait/config.json so impressions can be authenticated.
+// Requires COGWAIT_PAYOUT_ID (and COGWAIT_API if self-hosting).
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const client = require('../lib/client');
 
-const CONFIG_PATH = path.join(os.homedir(), '.sponsoric', 'config.json');
+const CONFIG_PATH = path.join(os.homedir(), '.cogwait', 'config.json');
 const pid = client.PAYOUT_ID;
 
 if (!pid) {
-  console.error('✗ Set SPONSORIC_PAYOUT_ID first (your chosen publisher id).');
+  console.error('✗ Set COGWAIT_PAYOUT_ID first (your chosen publisher id).');
   process.exit(1);
 }
 if (client.PUBLISHER_KEY) {

@@ -15,10 +15,10 @@ Do not open public issues for security reports. We aim to acknowledge within 72h
 | Impression fraud (inflation) | Client throttle + server dedupe + per-session daily cap + rate limiting. |
 | Supply chain | Zero runtime npm dependencies. Pin and sign releases before publishing to npm. |
 | Malicious ad content | Review gate (`pending` → `approved`); see `AD_POLICY.md`. |
-| Secret handling (backend) | `STRIPE_SECRET_KEY` / `SPONSORIC_ADMIN_TOKEN` via env only; never logged. |
+| Secret handling (backend) | `STRIPE_SECRET_KEY` / `COGWAIT_ADMIN_TOKEN` via env only; never logged. |
 | Payout redirection | Every publisher-scoped endpoint requires `Authorization: Publisher <id>:<secret>`; the destination is the publisher's **server-side** connected account — request-body `stripe_account` is ignored. |
 | Earnings enumeration (IDOR) | `/earnings` requires auth and is scoped to the authenticated publisher; `publisher_id` query/body is ignored for scoping. |
-| Default/weak admin token | Backend **refuses to start** without `SPONSORIC_ADMIN_TOKEN` or if it equals the old default; admin + secret checks use `crypto.timingSafeEqual`. |
+| Default/weak admin token | Backend **refuses to start** without `COGWAIT_ADMIN_TOKEN` or if it equals the old default; admin + secret checks use `crypto.timingSafeEqual`. |
 | Credit spoofing | Impression credit goes to the authenticated identity, never a body-supplied `publisher_id`. |
 
 ### Resolved review findings (2026-07-17)

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 'use strict';
-// Sponsoric statusline — the visible ad surface.
+// Cogwait statusline — the visible ad surface.
 // Claude Code pipes session JSON on stdin and renders whatever this prints.
 // Contract: fast, non-blocking, never manufactures delay. An impression is
 // only reported because the sponsor line was actually rendered to the terminal.
 
 const client = require('../lib/client');
+const { renderAd } = require('../lib/render');
 
 // Never let a closed pipe crash the statusline (it runs inside Claude Code's capture).
 process.stdout.on('error', (e) => { if (e && e.code === 'EPIPE') process.exit(0); });
@@ -31,33 +32,6 @@ process.stdin.on('end', () => {
   client.reportImpression(sessionId, ad, data.cost && data.cost.total_api_duration_ms);
 });
 
-// Render the sponsor placement for the developer's chosen level. Higher levels
-// are more prominent (and pay a higher CPM) — the dev opts into the trade.
-// Every level stays labeled `[sponsor]` and viewable-only.
-function renderAd(ad, level) {
-  const DIM = '\x1b[2m', CYAN = '\x1b[36m', BOLD = '\x1b[1m',
-        YELLOW = '\x1b[33m', MAGENTA = '\x1b[35m', RESET = '\x1b[0m';
-  const link = (s) => ad.url ? `\x1b]8;;${ad.url}\x07${s}\x1b]8;;\x07` : s;
-
-  if (level >= 3) {
-    // Boosted: a two-line boxed block — the most prominent placement.
-    const label = `${MAGENTA}${BOLD}◆ SPONSOR${RESET}`;
-    const head = `${BOLD}${ad.text}${RESET}`;
-    const cta = ad.url ? link(`${YELLOW}${ad.url} ›${RESET}`) : `${DIM}sponsored${RESET}`;
-    return `${label}  ${head}\n         ${cta}`;
-  }
-  if (level >= 2) {
-    // Standard: one bright, colored line with an icon and a call-to-action.
-    const label = `${YELLOW}${BOLD}▸ [sponsor]${RESET}`;
-    const text = `${CYAN}${ad.text}${RESET}`;
-    return `${label} ${link(text)}${ad.url ? ` ${YELLOW}›${RESET}` : ''}`;
-  }
-  // Minimal (default): one dim line, barely there.
-  const label = `${CYAN}[sponsor]${RESET}`;
-  const text = `${DIM}${ad.text}${RESET}`;
-  return ad.url ? `${label} ${link(`${text} ›`)}` : `${label} ${text}`;
-}
-
 // Run the user's pre-existing statusline command (if configured), feeding it the
 // same stdin JSON, and return its output to prepend above the sponsor line.
 function renderChain(stdinJson) {
@@ -65,10 +39,10 @@ function renderChain(stdinJson) {
   // The chained command is the user's own pre-existing statusLine string, and
   // Claude Code itself runs statusLine commands through a shell — so a shell is
   // the faithful (and only correct) way to run pipes/globs here. The real risk
-  // is a tampered config: if ~/.sponsoric/config.json is group/other-writable,
+  // is a tampered config: if ~/.cogwait/config.json is group/other-writable,
   // another user could rewrite `chain`. Refuse to run it in that state.
   if (!client.configIsTrustworthy()) {
-    process.stderr.write('[sponsoric] refusing to run chained statusline: config is not owner-only (chmod 600 ~/.sponsoric/config.json)\n');
+    process.stderr.write('[cogwait] refusing to run chained statusline: config is not owner-only (chmod 600 ~/.cogwait/config.json)\n');
     return '';
   }
   try {

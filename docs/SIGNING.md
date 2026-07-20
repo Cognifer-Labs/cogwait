@@ -29,9 +29,9 @@ notarizes and staples the ticket to the `.dmg`. Verify:
 
 ```bash
 codesign --verify --deep --strict --verbose=2 \
-  "src-tauri/target/release/bundle/macos/Sponsoric.app"
+  "src-tauri/target/release/bundle/macos/Cogwait.app"
 spctl -a -t open --context context:primary-signature -vv \
-  "src-tauri/target/release/bundle/dmg/Sponsoric_0.1.0_aarch64.dmg"
+  "src-tauri/target/release/bundle/dmg/Cogwait_0.1.0_aarch64.dmg"
 ```
 
 Both should report `accepted` / `valid on disk`.

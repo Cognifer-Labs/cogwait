@@ -1,8 +1,8 @@
-# Sponsoric Privacy Policy
+# Cogwait Privacy Policy
 
 _Last updated: 2026-07-17 · PoC draft — have counsel review before production._
 
-Sponsoric is built so that **your code, prompts, files, and secrets never leave
+Cogwait is built so that **your code, prompts, files, and secrets never leave
 your machine.** This document states exactly what is and isn't collected.
 
 ## What is NEVER collected or transmitted
@@ -40,9 +40,9 @@ terminal, throttled to once per session per 15 seconds.
 
 ## Your controls
 
-- `SPONSORIC_DISABLED=1` — pause all ads and reporting
-- `npx sponsoric --uninstall` — remove the status line entirely
-- `SPONSORIC_MOCK=1` — local demo mode; nothing is ever sent
+- `COGWAIT_DISABLED=1` — pause all ads and reporting
+- `npx cogwait --uninstall` — remove the status line entirely
+- `COGWAIT_MOCK=1` — local demo mode; nothing is ever sent
 
 ## Open source
 

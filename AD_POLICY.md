@@ -1,4 +1,4 @@
-# Sponsoric Ad Content Policy
+# Cogwait Ad Content Policy
 
 _PoC draft. All campaigns are reviewed before serving (`status: "pending"` until
 approved)._

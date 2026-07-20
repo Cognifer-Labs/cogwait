@@ -18,7 +18,7 @@ process.stdin.on('end', () => {
   try { sessionId = (JSON.parse(input || '{}').session_id) || 'anon'; } catch (_) {}
   const crypto = require('crypto');
   const tag = crypto.createHash('sha256').update(String(sessionId)).digest('hex').slice(0, 16);
-  const dir = path.join(os.homedir(), '.sponsoric');
+  const dir = path.join(os.homedir(), '.cogwait');
   try {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, `wait-${tag}.${phase}`), String(Date.now()));
