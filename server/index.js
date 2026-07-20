@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Sponsoric backend — reference implementation of the contract in README.md.
+// Cogwait backend — reference implementation of the contract in README.md.
 // Persistent store (JSON file, or Postgres when DATABASE_URL is set), rate
 // limiting, atomic fraud dedupe/caps, campaign-based ad serving, Stripe payouts.
 
@@ -14,14 +14,14 @@ const levels = require('../lib/levels');
 const PORT = Number(process.env.PORT || 8787);
 // Base/fallback CPM for a campaign that doesn't set its own. Level-based pricing
 // (lib/levels.js) is what a viewable impression is actually worth.
-const CPM_USD = Number(process.env.SPONSORIC_CPM || levels.cpmForLevel(levels.DEFAULT_LEVEL));
-const PUBLISHER_SHARE = Number(process.env.SPONSORIC_SHARE || 0.7);
-const MIN_PAYOUT_USD = Number(process.env.SPONSORIC_MIN_PAYOUT || 10);
+const CPM_USD = Number(process.env.COGWAIT_CPM || levels.cpmForLevel(levels.DEFAULT_LEVEL));
+const PUBLISHER_SHARE = Number(process.env.COGWAIT_SHARE || 0.7);
+const MIN_PAYOUT_USD = Number(process.env.COGWAIT_MIN_PAYOUT || 10);
 
 // Refuse to start without a real admin token — no default that ships open.
-const ADMIN_TOKEN = process.env.SPONSORIC_ADMIN_TOKEN || '';
+const ADMIN_TOKEN = process.env.COGWAIT_ADMIN_TOKEN || '';
 if (!ADMIN_TOKEN || ADMIN_TOKEN === 'dev-admin') {
-  throw new Error('SPONSORIC_ADMIN_TOKEN is required and must not be the default. Set a strong random value (e.g. `openssl rand -hex 16`).');
+  throw new Error('COGWAIT_ADMIN_TOKEN is required and must not be the default. Set a strong random value (e.g. `openssl rand -hex 16`).');
 }
 
 // Constant-time string comparison to avoid timing side channels on secrets.
@@ -45,7 +45,7 @@ async function authPublisher(req) {
 const DEDUPE_MS = 10000;                 // same tag+ad within window = not billable (atomic in store)
 const MAX_IMPRESSIONS_PER_SESSION_DAY = 500;
 const RATE_WINDOW_MS = 1000;
-const RATE_MAX = Number(process.env.SPONSORIC_RATE_MAX || 20); // requests/sec per key (per-instance)
+const RATE_MAX = Number(process.env.COGWAIT_RATE_MAX || 20); // requests/sec per key (per-instance)
 
 const perImpression = (level) => levels.perImpression(level, PUBLISHER_SHARE);
 const rate = new Map();                   // key -> {count, reset} (per-instance; see DEPLOY.md)
@@ -83,7 +83,7 @@ function rateLimited(key) {
 }
 function clientKey(req) { return (req.socket && req.socket.remoteAddress) || 'local'; }
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
-function log(m) { if (process.env.SPONSORIC_QUIET !== '1') process.stderr.write(`[sponsoric] ${m}\n`); }
+function log(m) { if (process.env.COGWAIT_QUIET !== '1') process.stderr.write(`[cogwait] ${m}\n`); }
 
 // Promisify the callback-based Stripe helpers.
 function stripeTransfer(pid, amount, opts) {
@@ -180,7 +180,8 @@ async function handler(req, res) {
       if (!auth) return send(res, 401, { error: 'unauthorized' });
       return send(res, 200, {
         publisher_id: auth.id, impressions: auth.impressions, balance_usd: auth.balance_usd,
-        min_payout_usd: MIN_PAYOUT_USD, payouts: await store.payoutsFor(auth.id)
+        min_payout_usd: MIN_PAYOUT_USD, created: auth.created || null,
+        payouts: await store.payoutsFor(auth.id)
       });
     }
 

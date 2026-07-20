@@ -10,7 +10,14 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sponsoric-e2e-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cogwait-e2e-'));
+// Isolated HOME so the client reads no real ~/.cogwait/config.json. Without this
+// a dev's local config (e.g. "mock": 1) leaks into the test — mock mode never
+// POSTs an impression, so settlement silently reports $0. It also keeps the test
+// from writing cache/stamp files into the real ~/.cogwait. (An empty COGWAIT_MOCK
+// env does NOT override config: pick() treats empty-string env as unset, so the
+// toggles below are set to an explicit "0".)
+const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cogwait-e2e-home-'));
 const PORT = 8799;
 const API = `http://localhost:${PORT}`;
 const PAYOUT = 'e2e-publisher';
@@ -18,14 +25,16 @@ const ROOT = path.resolve(__dirname, '..');
 const SESSION = 'e2e-session-' + process.pid;
 
 const env = (extra) => Object.assign({}, process.env, {
-  SPONSORIC_API: API,
-  SPONSORIC_PAYOUT_ID: PAYOUT,
-  SPONSORIC_MOCK: '',
-  SPONSORIC_DISABLED: '',
+  HOME: HOME_DIR,            // POSIX: os.homedir() -> STATE_DIR, so no dev config is read
+  USERPROFILE: HOME_DIR,     // Windows equivalent
+  COGWAIT_API: API,
+  COGWAIT_PAYOUT_ID: PAYOUT,
+  COGWAIT_MOCK: '0',         // explicit override (empty string would fall through to config)
+  COGWAIT_DISABLED: '0',
   PORT: String(PORT),
-  SPONSORIC_DATA_DIR: DATA_DIR,
-  SPONSORIC_ADMIN_TOKEN: 'e2e-admin-token',
-  SPONSORIC_QUIET: '1'
+  COGWAIT_DATA_DIR: DATA_DIR,
+  COGWAIT_ADMIN_TOKEN: 'e2e-admin-token',
+  COGWAIT_QUIET: '1'
 }, extra || {});
 
 function get(url) {
@@ -60,7 +69,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   let failed = 0;
   const assert = (c, m) => { console.log(c ? '  ✓' : '  ✗', m); if (!c) failed++; };
-  console.log('Sponsoric e2e settlement test');
+  console.log('Cogwait e2e settlement test');
 
   const server = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], {
     env: env(), stdio: 'ignore'
@@ -78,14 +87,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // 1. Prime the ad cache (statusline reads cache; this fetches from the live API).
     const warm = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'refresh-ad.js')],
-      { env: env({ SPONSORIC_SESSION: SESSION, SPONSORIC_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
+      { env: env({ COGWAIT_SESSION: SESSION, COGWAIT_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
     assert(warm.status === 0, 'ad refresh ran');
     await sleep(200);
 
     // 2. Render the statusline against the live backend.
     const sample = JSON.stringify({ session_id: SESSION, cost: { total_api_duration_ms: 800 } });
     const sl = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'statusline.js')],
-      { input: sample, env: env({ SPONSORIC_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
+      { input: sample, env: env({ COGWAIT_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
     assert(sl.status === 0, 'statusline exits 0');
     assert(/\[sponsor\]/.test(sl.stdout), 'sponsor line rendered');
 
@@ -97,7 +106,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // 4. Re-render immediately -> client throttle means NO second impression.
     spawnSync(process.execPath, [path.join(ROOT, 'bin', 'statusline.js')],
-      { input: sample, env: env({ SPONSORIC_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
+      { input: sample, env: env({ COGWAIT_PUBLISHER_KEY: KEY }), encoding: 'utf8' });
     await sleep(400);
     const earn2 = await getAuth('/earnings', KEY);
     assert(earn2.impressions === 1, 'throttle prevented a duplicate impression');
@@ -108,6 +117,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   } finally {
     server.kill();
     try { fs.rmSync(DATA_DIR, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(HOME_DIR, { recursive: true, force: true }); } catch (_) {}
   }
 
   console.log(failed === 0 ? 'PASS' : `FAIL (${failed})`);
