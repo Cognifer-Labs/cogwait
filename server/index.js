@@ -17,11 +17,25 @@ const PORT = Number(process.env.PORT || 8787);
 const CPM_USD = Number(process.env.COGWAIT_CPM || levels.cpmForLevel(levels.DEFAULT_LEVEL));
 const PUBLISHER_SHARE = Number(process.env.COGWAIT_SHARE || 0.7);
 const MIN_PAYOUT_USD = Number(process.env.COGWAIT_MIN_PAYOUT || 10);
+// Fund-OSS: pooled destination for the donation leg of a payout. If unset, the
+// donation leg simulates exactly like lib/stripe.js does without a key — the
+// flow stays testable, and `stripe.live` stays the single source of truth for
+// "are transfers real" (this env only decides the donation leg's destination).
+const FUND_ACCOUNT = process.env.COGWAIT_FUND_ACCOUNT || '';
+const FUND_LABEL = FUND_ACCOUNT || 'cogwait-oss-fund'; // symbolic label even when simulated
 
 // Refuse to start without a real admin token — no default that ships open.
 const ADMIN_TOKEN = process.env.COGWAIT_ADMIN_TOKEN || '';
 if (!ADMIN_TOKEN || ADMIN_TOKEN === 'dev-admin') {
   throw new Error('COGWAIT_ADMIN_TOKEN is required and must not be the default. Set a strong random value (e.g. `openssl rand -hex 16`).');
+}
+
+// COGWAIT_TEST_FAIL_DONATE_ONCE forces a real Stripe donation transfer to fail —
+// it exists purely to make the payout idempotency test deterministic. It must
+// never be able to fire against a real prod payout, so refuse to start rather
+// than risk a forced failure on a live donation leg.
+if (process.env.COGWAIT_TEST_FAIL_DONATE_ONCE === '1' && process.env.NODE_ENV === 'production') {
+  throw new Error('COGWAIT_TEST_FAIL_DONATE_ONCE must never be set with NODE_ENV=production — it forces real donation transfers to fail.');
 }
 
 // Constant-time string comparison to avoid timing side channels on secrets.
@@ -91,6 +105,30 @@ function stripeTransfer(pid, amount, opts) {
 }
 function stripeOnboard(pid) {
   return new Promise((resolve, reject) => stripe.onboard(pid, (e, r) => e ? reject(e) : resolve(r)));
+}
+
+// Test-only failure injection for the idempotency regression test (§8.0/§8.2):
+// forces the donation leg to fail exactly once per idempotency key, so a test
+// can exercise "cashout settles, donation fails, retry settles only the
+// donation leg" without a real Stripe outage. Off unless explicitly opted in;
+// never touches the cashout leg or any other request.
+const FAILED_DONATE_KEYS = new Set();
+function maybeForceDonateFailure(idempotencyKey) {
+  if (process.env.COGWAIT_TEST_FAIL_DONATE_ONCE !== '1' || !idempotencyKey) return;
+  if (FAILED_DONATE_KEYS.has(idempotencyKey)) return; // only the first attempt fails
+  FAILED_DONATE_KEYS.add(idempotencyKey);
+  throw new Error('test_forced_donation_failure');
+}
+
+// The donation leg transfers to the pooled Fund-OSS account. Simulated whenever
+// COGWAIT_FUND_ACCOUNT is unset, independent of whether STRIPE_SECRET_KEY is
+// live — a configured fund destination is required before donations go real.
+function fundTransfer(pid, amount, idempotencyKey) {
+  maybeForceDonateFailure(idempotencyKey);
+  if (!FUND_ACCOUNT) {
+    return Promise.resolve({ id: 'sim_fund_' + Date.now(), simulated: true, amount_usd: amount, destination: 'unlinked' });
+  }
+  return stripeTransfer(pid, amount, { stripe_account: FUND_ACCOUNT, idempotency_key: idempotencyKey });
 }
 
 // Pick an ad: prefer an approved campaign with budget, else a house ad.
@@ -178,31 +216,117 @@ async function handler(req, res) {
     if (p === '/earnings' && req.method === 'GET') {
       const auth = await authPublisher(req);           // scope strictly to the authenticated publisher
       if (!auth) return send(res, 401, { error: 'unauthorized' });
+      const payouts = await store.payoutsFor(auth.id); // settled only — pending legs never show as finished
       return send(res, 200, {
         publisher_id: auth.id, impressions: auth.impressions, balance_usd: auth.balance_usd,
         min_payout_usd: MIN_PAYOUT_USD, created: auth.created || null,
-        payouts: await store.payoutsFor(auth.id)
+        donate_pct: auth.donate_pct,
+        payouts,
+        donations: payouts.filter((r) => r.kind === 'donation')
       });
     }
 
-    // POST /payout — pay out the publisher's balance via Stripe (real or simulated).
+    // POST /donate/config — set the Fund-OSS give-back percentage (0-100, server-clamped).
+    if (p === '/donate/config' && req.method === 'POST') {
+      const b = await readBody(req);
+      const pub = await authPublisher(req);
+      if (!pub) return send(res, 401, { error: 'unauthorized' });
+      const n = Math.round(Number(b.donate_pct));
+      const pct = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : pub.donate_pct;
+      const updated = await store.setDonatePct(pub.id, pct);
+      return send(res, 200, { ok: true, donate_pct: updated.donate_pct });
+    }
+
+    // POST /payout — pay out the publisher's balance via Stripe (real or simulated),
+    // split server-side into a cashout leg (keep) and a donation leg (Fund-OSS give-back).
+    // Idempotency mechanism (§8.0, DESIGN.md §10): a payout row is inserted with
+    // status:'pending' BEFORE any Stripe call. A retry resumes those pending rows
+    // rather than recomputing keep/donate from the (possibly already-moved)
+    // balance, so a failed sibling leg can never cause a double cashout.
+    //
+    // The resume-or-fresh decision itself (store.claimPayoutBatch) is a SINGLE
+    // atomic store operation — Postgres does it under a row-locked transaction
+    // (SELECT ... FOR UPDATE on the publisher) — so two near-simultaneous
+    // /payout calls for the same publisher can never both observe "nothing
+    // pending" and both compute+insert a fresh batch (which would fire two
+    // real Stripe transfers off the same un-moved balance).
     if (p === '/payout' && req.method === 'POST') {
       await readBody(req);
       const pub = await authPublisher(req);
       if (!pub) return send(res, 401, { error: 'unauthorized' });
       const pid = pub.id;
-      if (pub.balance_usd < MIN_PAYOUT_USD) {
-        return send(res, 400, { error: 'below_minimum', balance_usd: pub.balance_usd, min_payout_usd: MIN_PAYOUT_USD });
+
+      // computeLegs runs INSIDE the store's atomic claim, against the row-locked
+      // publisher record — never against the (possibly stale) `pub` fetched above.
+      const claim = await store.claimPayoutBatch(pid, (lockedPub) => {
+        if (!lockedPub || lockedPub.balance_usd < MIN_PAYOUT_USD) return null;
+        const pct = Math.max(0, Math.min(100, Number(lockedPub.donate_pct) || 0));
+        const donate = store.round(lockedPub.balance_usd * pct / 100);
+        const keep = store.round(lockedPub.balance_usd - donate);
+        if (keep <= 0 && donate <= 0) return null;
+        return { keep, donate, fund: FUND_LABEL };
+      });
+
+      if (claim.belowMinimum || (!claim.cashoutRow && !claim.donationRow)) {
+        const balance = claim.pub ? claim.pub.balance_usd : pub.balance_usd;
+        return send(res, 400, { error: 'below_minimum', balance_usd: balance, min_payout_usd: MIN_PAYOUT_USD });
       }
-      const amount = pub.balance_usd;
-      // Destination is the publisher's server-side connected account — never from the request body.
-      let result;
-      try { result = await stripeTransfer(pid, amount, { stripe_account: pub.stripe_account }); }
-      catch (e) { return send(res, 502, { error: 'payout_failed', detail: e.message }); }
-      await store.setBalance(pid, 0);
-      await store.recordPayout({ pid, amount_usd: amount, ts: Date.now(), transfer: result.id, simulated: !!result.simulated });
-      log(`payout pub=${pid} $${amount.toFixed(2)} ${result.simulated ? '(simulated)' : ''} -> ${result.id}`);
-      return send(res, 200, { ok: true, paid_usd: amount, transfer: result.id, simulated: !!result.simulated });
+
+      let cashoutRow = claim.cashoutRow, donationRow = claim.donationRow;
+      const stripeAccount = claim.pub ? claim.pub.stripe_account : pub.stripe_account;
+      let failed = false, simulated = false;
+
+      // Attempt only legs not yet settled (claimPayoutBatch's resume path only
+      // returns 'pending' rows, so an already-settled sibling from a prior partial
+      // failure is simply absent here — never retransferred).
+      //
+      // settlePayoutLeg marks the leg settled AND, only if this was the last
+      // outstanding leg, zeroes the balance — atomically, under the same
+      // publisher row lock claimPayoutBatch uses. That closes the second half
+      // of the double-payout race: "settle" and "zero the balance" used to be
+      // two separate unlocked steps, and a concurrent claimPayoutBatch could
+      // acquire the row lock in the gap between them and see an empty pending
+      // set alongside a still-unzeroed balance — a second real payout from the
+      // same money. There is no such gap anymore.
+      if (cashoutRow && cashoutRow.status !== 'settled') {
+        try {
+          const result = await stripeTransfer(pid, cashoutRow.amount_usd, {
+            stripe_account: stripeAccount, idempotency_key: cashoutRow.idempotency_key
+          });
+          const settled = await store.settlePayoutLeg(pid, cashoutRow.id, {
+            transfer: result.id, simulated: !!result.simulated, status: 'settled'
+          });
+          cashoutRow = settled.row;
+          simulated = simulated || !!result.simulated;
+        } catch (e) {
+          failed = true;
+          log(`payout cashout leg failed pub=${pid}: ${e.message}`);
+        }
+      }
+      if (!failed && donationRow && donationRow.status !== 'settled') {
+        try {
+          const result = await fundTransfer(pid, donationRow.amount_usd, donationRow.idempotency_key);
+          const settled = await store.settlePayoutLeg(pid, donationRow.id, {
+            transfer: result.id, simulated: !!result.simulated, status: 'settled'
+          });
+          donationRow = settled.row;
+          simulated = simulated || !!result.simulated;
+        } catch (e) {
+          failed = true;
+          log(`payout donation leg failed pub=${pid}: ${e.message}`);
+        }
+      }
+
+      if (failed) return send(res, 502, { error: 'payout_failed', partial: true });
+
+      log(`payout pub=${pid} keep=$${cashoutRow ? cashoutRow.amount_usd.toFixed(4) : '0'} donate=$${donationRow ? donationRow.amount_usd.toFixed(4) : '0'} ${simulated ? '(simulated)' : ''}`);
+      return send(res, 200, {
+        ok: true,
+        paid_usd: cashoutRow ? cashoutRow.amount_usd : 0,
+        donated_usd: donationRow ? donationRow.amount_usd : 0,
+        transfers: { cashout: cashoutRow ? cashoutRow.transfer : null, donation: donationRow ? donationRow.transfer : null },
+        simulated
+      });
     }
 
     // POST /campaign — advertiser creates a campaign (admin-gated in this stub).

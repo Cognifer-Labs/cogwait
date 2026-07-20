@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// sponsoric setup — writes the statusLine entry into ~/.claude/settings.json.
+// cogwait setup — writes the statusLine entry into ~/.claude/settings.json.
 // A Claude Code plugin's bundled settings.json cannot ship the main `statusLine`
 // (only `agent` / `subagentStatusLine` are supported), so — like idlepay/idlen —
 // the setup step injects it into the user's settings, merging non-destructively.
@@ -13,13 +13,17 @@ const os = require('os');
 if (process.argv.includes('--doctor')) { require('./doctor.js'); return; }
 // Register with the backend to obtain a publisher key, then store it in config.
 if (process.argv.includes('--register')) { require('./register.js'); return; }
+// Fund-OSS: local dependency scan + receipt (--oss), or set the give-back % (--donate <pct>).
+if (process.argv.includes('--oss') || process.argv.some((a) => a === '--donate' || a.startsWith('--donate='))) {
+  require('./oss.js'); return;
+}
 
 const HOME = os.homedir();
 const SETTINGS = path.join(HOME, '.claude', 'settings.json');
 const STATUSLINE = path.resolve(__dirname, 'statusline.js');
 const uninstall = process.argv.includes('--uninstall');
 const chain = process.argv.includes('--chain');
-const CONFIG_PATH = path.join(HOME, '.sponsoric', 'config.json');
+const CONFIG_PATH = path.join(HOME, '.cogwait', 'config.json');
 const levels = require('../lib/levels');
 const client = require('../lib/client');
 
@@ -51,7 +55,7 @@ function readSettings() {
 
 function backup() {
   if (!fs.existsSync(SETTINGS)) return null;
-  const bak = `${SETTINGS}.sponsoric-bak`;
+  const bak = `${SETTINGS}.cogwait-bak`;
   try { fs.copyFileSync(SETTINGS, bak); return bak; } catch (_) { return null; }
 }
 
@@ -73,19 +77,18 @@ const bak = backup();
 
 if (uninstall) {
   if (s.statusLine && typeof s.statusLine.command === 'string' &&
-      s.statusLine.command.includes('statusline.js') &&
-      s.statusLine.command.includes('sponsoric')) {
+      s.statusLine.command.includes(STATUSLINE)) {
     delete s.statusLine;
     write(s);
-    console.log('✓ Removed Sponsoric statusLine from', SETTINGS);
+    console.log('✓ Removed Cogwait statusLine from', SETTINGS);
   } else {
-    console.log('• No Sponsoric statusLine found; left settings untouched.');
+    console.log('• No Cogwait statusLine found; left settings untouched.');
   }
   if (bak) console.log('• Backup:', bak);
   process.exit(0);
 }
 
-if (s.statusLine && !String(s.statusLine.command || '').includes('sponsoric')) {
+if (s.statusLine && !String(s.statusLine.command || '').includes(STATUSLINE)) {
   if (chain && s.statusLine.type === 'command' && s.statusLine.command) {
     saveChain(s.statusLine.command);
     console.log('✓ Chaining your existing statusLine (saved to', CONFIG_PATH + ').');
@@ -93,8 +96,8 @@ if (s.statusLine && !String(s.statusLine.command || '').includes('sponsoric')) {
   } else {
     console.log('⚠ You already have a custom statusLine:');
     console.log('   ', JSON.stringify(s.statusLine));
-    console.log('  Sponsoric will not overwrite it. Re-run with --chain to keep both:');
-    console.log('    npx sponsoric --chain');
+    console.log('  Cogwait will not overwrite it. Re-run with --chain to keep both:');
+    console.log('    npx cogwait --chain');
     console.log('  or remove yours first. Aborting.');
     process.exit(1);
   }
@@ -108,18 +111,18 @@ s.statusLine = {
 };
 write(s);
 
-const payout = process.env.SPONSORIC_PAYOUT_ID;
-console.log('✓ Sponsoric statusLine installed to', SETTINGS);
+const payout = process.env.COGWAIT_PAYOUT_ID;
+console.log('✓ Cogwait statusLine installed to', SETTINGS);
 if (bak) console.log('  Backup saved:', bak);
 console.log('');
 console.log('Next steps:');
 if (!payout) {
-  console.log('  1. Set your payout id:   export SPONSORIC_PAYOUT_ID="your-id"');
+  console.log('  1. Set your payout id:   export COGWAIT_PAYOUT_ID="your-id"');
   console.log('     (add it to ~/.zshrc or ~/.bashrc to persist)');
 } else {
   console.log('  1. Payout id detected:   ' + payout);
 }
-console.log('  2. Try it with no backend:  export SPONSORIC_MOCK=1');
+console.log('  2. Try it with no backend:  export COGWAIT_MOCK=1');
 console.log('  3. Restart Claude Code and accept the workspace-trust prompt.');
 console.log('');
 const activeLevel = chosenLevel !== null ? chosenLevel : levels.DEFAULT_LEVEL;
@@ -130,7 +133,7 @@ for (const L of levels.LEVELS) {
   const cpm = L.cpm ? `$${L.cpm} CPM` : '—';
   console.log(`   ${mark} ${L.id} ${L.label.padEnd(9)} ${cpm.padEnd(9)} ${L.desc}`);
 }
-console.log('  Change it:  npx sponsoric --level 2   (or SPONSORIC_LEVEL=2)');
+console.log('  Change it:  npx cogwait --level 2   (or COGWAIT_LEVEL=2)');
 console.log('');
-console.log('Controls:  SPONSORIC_DISABLED=1 to pause · `npx sponsoric --uninstall` to remove.');
+console.log('Controls:  COGWAIT_DISABLED=1 to pause · `npx cogwait --uninstall` to remove.');
 console.log('Privacy:   your prompts, code, and files are never sent. See README.md.');

@@ -13,25 +13,25 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
 let failed = 0;
 const assert = (c, m) => { console.log(c ? '  ✓' : '  ✗', m); if (!c) failed++; };
-console.log('Sponsoric adapter + offline-resilience test');
+console.log('Cogwait adapter + offline-resilience test');
 
 // 1. Handler export is a function (requires a token to load).
 {
-  const code = `process.env.SPONSORIC_ADMIN_TOKEN='x';const h=require(${JSON.stringify(path.join(ROOT,'server','index.js'))}).handler;process.stdout.write(typeof h)`;
+  const code = `process.env.COGWAIT_ADMIN_TOKEN='x';const h=require(${JSON.stringify(path.join(ROOT,'server','index.js'))}).handler;process.stdout.write(typeof h)`;
   const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
   assert(r.stdout.trim() === 'function', 'server exports a request handler for the serverless adapter');
   const r2 = spawnSync(process.execPath, ['-e', `const a=require(${JSON.stringify(path.join(ROOT,'api','index.js'))});process.stdout.write(typeof a)`],
-    { encoding: 'utf8', env: Object.assign({}, process.env, { SPONSORIC_ADMIN_TOKEN: 'x' }) });
+    { encoding: 'utf8', env: Object.assign({}, process.env, { COGWAIT_ADMIN_TOKEN: 'x' }) });
   assert(r2.stdout.trim() === 'function', 'api/index.js re-exports the handler');
 }
 
 // 2. Backend refuses to load without a strong admin token.
 {
   const r = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(path.join(ROOT,'server','index.js'))})`],
-    { encoding: 'utf8', env: Object.assign({}, process.env, { SPONSORIC_ADMIN_TOKEN: '' }) });
-  assert(r.status !== 0 && /SPONSORIC_ADMIN_TOKEN/.test(r.stderr), 'backend refuses to load without an admin token');
+    { encoding: 'utf8', env: Object.assign({}, process.env, { COGWAIT_ADMIN_TOKEN: '' }) });
+  assert(r.status !== 0 && /COGWAIT_ADMIN_TOKEN/.test(r.stderr), 'backend refuses to load without an admin token');
   const r2 = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(path.join(ROOT,'server','index.js'))})`],
-    { encoding: 'utf8', env: Object.assign({}, process.env, { SPONSORIC_ADMIN_TOKEN: 'dev-admin' }) });
+    { encoding: 'utf8', env: Object.assign({}, process.env, { COGWAIT_ADMIN_TOKEN: 'dev-admin' }) });
   assert(r2.status !== 0, 'backend refuses the old default token');
 }
 
@@ -39,7 +39,7 @@ console.log('Sponsoric adapter + offline-resilience test');
 //    statusline still renders the last known ad (fails soft, never blank-on-error).
 {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spon-off-'));
-  const stateDir = path.join(home, '.sponsoric');
+  const stateDir = path.join(home, '.cogwait');
   fs.mkdirSync(stateDir, { recursive: true });
   // Seed a cached ad for the session tag (sha256(session)[0:16]).
   const crypto = require('crypto');
@@ -51,8 +51,8 @@ console.log('Sponsoric adapter + offline-resilience test');
     input: sample, encoding: 'utf8',
     env: Object.assign({}, process.env, {
       HOME: home, USERPROFILE: home,
-      SPONSORIC_API: 'http://127.0.0.1:9', // unreachable
-      SPONSORIC_PAYOUT_ID: 'off', SPONSORIC_PUBLISHER_KEY: 'k', SPONSORIC_MOCK: ''
+      COGWAIT_API: 'http://127.0.0.1:9', // unreachable
+      COGWAIT_PAYOUT_ID: 'off', COGWAIT_PUBLISHER_KEY: 'k', COGWAIT_MOCK: ''
     })
   });
   assert(/Cached sponsor line/.test(r.stdout), 'renders last cached ad when backend is unreachable');
@@ -66,7 +66,7 @@ console.log('Sponsoric adapter + offline-resilience test');
   const PORT = 8815;
   const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'spon-rl-'));
   const srv = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], {
-    env: Object.assign({}, process.env, { PORT: String(PORT), SPONSORIC_DATA_DIR: DATA, SPONSORIC_ADMIN_TOKEN: 'x', SPONSORIC_RATE_MAX: '3', SPONSORIC_QUIET: '1' }),
+    env: Object.assign({}, process.env, { PORT: String(PORT), COGWAIT_DATA_DIR: DATA, COGWAIT_ADMIN_TOKEN: 'x', COGWAIT_RATE_MAX: '3', COGWAIT_QUIET: '1' }),
     stdio: 'ignore'
   });
   await new Promise((r) => setTimeout(r, 600));

@@ -1,12 +1,12 @@
 {
-  "name": "sponsoric",
+  "name": "cogwait",
   "version": "0.1.0",
   "description": "Earn revenue while your AI thinks — one opt-in, labeled sponsor line in the Claude Code status row. Never reads your code, files, or prompts.",
   "license": "MIT",
   "author": "Cognifer Labs LLC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cognifer-labs/sponsoric"
+    "url": "https://github.com/cognifer-labs/cogwait"
   },
   "keywords": [
     "claude-code",
@@ -16,13 +16,13 @@
     "sponsor"
   ],
   "bin": {
-    "sponsoric": "bin/setup.js"
+    "cogwait": "bin/setup.js"
   },
   "scripts": {
     "setup": "node bin/setup.js",
     "serve": "node server/index.js",
     "doctor": "node bin/doctor.js",
-    "test": "node test/smoke.js && node test/client.js && node test/backend.js && node test/adapter.js && node test/store-interface.js && node test/e2e.js",
+    "test": "node test/smoke.js && node test/client.js && node test/backend.js && node test/adapter.js && node test/store-interface.js && node test/platforms.js && node test/oss.js && node test/e2e.js",
     "test:e2e": "node test/e2e.js"
   },
   "engines": {

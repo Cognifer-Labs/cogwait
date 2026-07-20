@@ -11,7 +11,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-const DATA_DIR = process.env.SPONSORIC_DATA_DIR || path.join(os.homedir(), '.sponsoric', 'server');
+const DATA_DIR = process.env.COGWAIT_DATA_DIR || path.join(os.homedir(), '.cogwait', 'server');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 
 const EMPTY = { publishers: {}, campaigns: {}, impressions: [], payouts: [] };
@@ -51,7 +51,8 @@ async function publisher(pid) {
   if (!d.publishers[pid]) {
     d.publishers[pid] = {
       id: pid, balance_usd: 0, impressions: 0, created: Date.now(),
-      secret: crypto.randomBytes(24).toString('hex'), stripe_account: null
+      secret: crypto.randomBytes(24).toString('hex'), stripe_account: null,
+      donate_pct: 20 // Fund-OSS mode is on by default; the dev dials it down.
     };
     persist();
   }
@@ -62,6 +63,14 @@ async function getPublisher(pid) { return load().publishers[pid]; }
 async function setStripeAccount(pid, acct) {
   const p = await publisher(pid);
   p.stripe_account = acct || null; persist(); return p;
+}
+// Clamp 0-100 server-side — the client can't be trusted to move money.
+async function setDonatePct(pid, pct) {
+  const p = await publisher(pid);
+  const n = Math.round(Number(pct));
+  if (Number.isFinite(n)) p.donate_pct = Math.max(0, Math.min(100, n));
+  persist();
+  return p;
 }
 async function setBalance(pid, amount) {
   const p = await publisher(pid);
@@ -88,8 +97,96 @@ async function spendCampaign(id, amount) {
   return c;
 }
 
-async function recordPayout(p) { load().payouts.push(p); persist(); return p; }
-async function payoutsFor(pid) { return load().payouts.filter((p) => p.pid === pid); }
+// Fund-OSS two-leg payout idempotency (see server/index.js §8.0): a payout row
+// is inserted with status:'pending' BEFORE the Stripe call, so a crash or a
+// failed sibling leg is safely resumable — never re-attempted, never lost.
+// `status` defaults to 'settled' for backward compat with pre-fund-oss rows
+// that never had the field at all.
+async function recordPayout(p) {
+  const row = Object.assign({
+    id: crypto.randomBytes(12).toString('hex'),
+    kind: 'cashout', fund: null, status: 'settled', idempotency_key: null
+  }, p);
+  load().payouts.push(row);
+  persist();
+  return row;
+}
+// Settled payouts only — an in-flight pending row is never shown as finished.
+async function payoutsFor(pid) {
+  return load().payouts.filter((p) => p.pid === pid && (p.status === 'settled' || p.status === undefined));
+}
+async function pendingPayoutsFor(pid) {
+  return load().payouts.filter((p) => p.pid === pid && p.status === 'pending');
+}
+
+// Atomic "resume existing pending batch OR create a fresh one" — same contract
+// as store-pg.js's claimPayoutBatch (interface parity), kept here as a single
+// synchronous check-then-insert since this store has no separate DB round
+// trips for two concurrent requests to race between (see store-pg.js for why
+// the race is real there). `computeLegs(pub)` is caller-supplied business
+// logic (min-payout threshold, donate_pct clamp, fund label); this store only
+// owns the check-then-insert mechanics.
+async function claimPayoutBatch(pid, computeLegs) {
+  const pub = await getPublisher(pid);
+  if (!pub) return { pub: null, resumed: false, belowMinimum: true, cashoutRow: null, donationRow: null };
+
+  const pending = load().payouts.filter((p) => p.pid === pid && p.status === 'pending');
+  if (pending.length) {
+    return {
+      pub, resumed: true, belowMinimum: false,
+      cashoutRow: pending.find((p) => p.kind === 'cashout') || null,
+      donationRow: pending.find((p) => p.kind === 'donation') || null
+    };
+  }
+
+  const legs = computeLegs(pub);
+  if (!legs || (!(legs.keep > 0) && !(legs.donate > 0))) {
+    return { pub, resumed: false, belowMinimum: true, cashoutRow: null, donationRow: null };
+  }
+
+  const batchId = crypto.randomBytes(8).toString('hex');
+  let cashoutRow = null, donationRow = null;
+  if (legs.keep > 0) {
+    cashoutRow = await recordPayout({
+      pid, amount_usd: legs.keep, ts: Date.now(), kind: 'cashout', fund: null,
+      status: 'pending', idempotency_key: `payout_${pid}_${batchId}_cashout`
+    });
+  }
+  if (legs.donate > 0) {
+    donationRow = await recordPayout({
+      pid, amount_usd: legs.donate, ts: Date.now(), kind: 'donation', fund: legs.fund || null,
+      status: 'pending', idempotency_key: `payout_${pid}_${batchId}_donation`
+    });
+  }
+  return { pub, resumed: false, belowMinimum: false, cashoutRow, donationRow };
+}
+async function settlePayout(id, patch) {
+  const row = load().payouts.find((p) => p.id === id);
+  if (!row) return null;
+  Object.assign(row, patch);
+  persist();
+  return row;
+}
+
+// Settle one payout leg AND, if this was the last outstanding ('pending') leg
+// for the publisher, zero the balance — same contract as store-pg.js's
+// settlePayoutLeg (interface parity). Kept here as a single synchronous
+// check-then-write since this store has no separate DB round trips for two
+// concurrent requests to race between.
+async function settlePayoutLeg(pid, id, patch) {
+  const d = load();
+  const row = d.payouts.find((p) => p.id === id);
+  if (!row) return { row: null, zeroed: false };
+  Object.assign(row, patch);
+  const stillPending = d.payouts.some((p) => p.pid === pid && p.status === 'pending');
+  let zeroed = false;
+  if (!stillPending) {
+    const pub = d.publishers[pid];
+    if (pub) { pub.balance_usd = 0; zeroed = true; }
+  }
+  persist();
+  return { row, zeroed };
+}
 
 async function impressionsInWindow(sessionTag, sinceMs) {
   const cutoff = Date.now() - sinceMs;
@@ -109,8 +206,9 @@ async function close() { flush(); }
 
 module.exports = {
   backend: 'json', init, round,
-  publisher, getPublisher, setStripeAccount, setBalance, creditImpression,
+  publisher, getPublisher, setStripeAccount, setBalance, setDonatePct, creditImpression,
   addCampaign, getCampaign, allCampaigns, activeCampaigns, spendCampaign,
-  recordPayout, payoutsFor, impressionsInWindow, dedupeSeen, close,
+  recordPayout, payoutsFor, pendingPayoutsFor, settlePayout, claimPayoutBatch, settlePayoutLeg,
+  impressionsInWindow, dedupeSeen, close,
   flush, DB_PATH, DATA_DIR
 };
