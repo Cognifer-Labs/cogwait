@@ -1,0 +1,27 @@
+{
+  "name": "cogwait-vscode",
+  "displayName": "Cogwait",
+  "description": "Opt-in, labeled sponsor line in the VS Code / Cursor status bar. Shares ad revenue with you. Renders via the official StatusBarItem API — nothing is injected into the editor.",
+  "version": "0.1.0",
+  "publisher": "cognifer-labs",
+  "license": "MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "cogwait.openSponsor", "title": "Cogwait: Open sponsor link" }
+    ],
+    "configuration": {
+      "title": "Cogwait",
+      "properties": {
+        "cogwait.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the labeled sponsor line in the status bar. Turn off to render nothing (nothing earns)."
+        }
+      }
+    }
+  }
+}

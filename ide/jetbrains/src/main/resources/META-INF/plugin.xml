@@ -1,0 +1,21 @@
+<idea-plugin>
+  <id>io.cogwait.jetbrains</id>
+  <name>Cogwait</name>
+  <version>0.1.0</version>
+  <vendor url="https://github.com/cognifer-labs/cogwait">Cognifer Labs</vendor>
+  <description><![CDATA[
+    Opt-in, labeled sponsor line in the JetBrains status bar, rendered through the
+    official StatusBarWidget API. Nothing is injected into the IDE — you install
+    the plugin, and it uses the sanctioned status-bar surface. Shares ad revenue
+    with you, same accounting as the Cogwait CLI.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <statusBarWidgetFactory
+        id="CogwaitWidget"
+        implementation="io.cogwait.jetbrains.CogwaitWidgetFactory"
+        order="last"/>
+  </extensions>
+</idea-plugin>
