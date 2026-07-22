@@ -4,7 +4,8 @@ import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
 // ---- types mirroring the Rust JSON ----
 type State = {
   payout_id: string; has_key: boolean; level: number; disabled: boolean; mock: boolean;
-  api: string; cli_path: string; installed: boolean; config_path: string; settings_path: string; share: number;
+  api: string; cli_path: string; installed: boolean; config_path: string; settings_path: string;
+  chain: string; share: number;
 };
 type Level = { id: number; key: string; label: string; cpm: number; desc: string; per_impression: number; max_daily: number };
 type LevelsInfo = { share: number; daily_cap: number; levels: Level[] };
@@ -17,8 +18,12 @@ const inTauri = typeof (window as any).__TAURI_INTERNALS__ !== "undefined" || ty
 const demo: State = {
   payout_id: "demo-dev", has_key: true, level: 2, disabled: false, mock: false,
   api: "https://api.cogwait.io", cli_path: "/Users/you/cogwait/bin/statusline.js",
-  installed: true, config_path: "~/.cogwait/config.json", settings_path: "~/.claude/settings.json", share: 0.7,
+  installed: true, config_path: "~/.cogwait/config.json", settings_path: "~/.claude/settings.json",
+  chain: "", share: 0.7,
 };
+// Demo cash-out method state for the browser-preview fallback (mirrors the
+// server's /earnings + /payout/method shape: masked email, never the raw one).
+const demoMethod = { payout_method: "stripe", paypal_email: "", stripe_linked: false };
 function demoLevels(): LevelsInfo {
   const base = [
     { id: 0, key: "off", label: "Off", cpm: 0, desc: "No sponsor line. Nothing renders, nothing earns." },
@@ -46,6 +51,7 @@ function demoReceipt() {
 }
 async function mockInvoke(cmd: string, args?: any): Promise<any> {
   switch (cmd) {
+    case "app_version": return "0.1.0";
     case "get_state": return { ...demo };
     case "get_levels": return demoLevels();
     case "save_config": Object.assign(demo, args?.patch || {}); return { ...demo };
@@ -58,10 +64,25 @@ async function mockInvoke(cmd: string, args?: any): Promise<any> {
       { status: demo.level === 0 ? "warn" : "ok", msg: demo.level === 0 ? "ad level 0 (Off) — nothing earns" : `ad level ${demo.level} active` },
     ] };
     case "get_earnings": return { balance_usd: 7.4231, impressions: 1326, min_payout_usd: 10,
+      payout_method: demoMethod.payout_method, paypal_email: demoMethod.paypal_email, stripe_linked: demoMethod.stripe_linked,
       payouts: [{ ts: Date.now() - 86400000 * 9, amount_usd: 12.5, transfer: "tr_1OkD3x2eZvKYlo", simulated: false },
                 { ts: Date.now() - 86400000 * 23, amount_usd: 10.0, transfer: "tr_1Nf9a2eZvKYlo", simulated: false }] };
     case "request_payout": return { ok: false, error: "below_minimum" };
     case "connect_onboard": return { url: "https://connect.stripe.com/setup/demo", simulated: true };
+    case "set_payout_method": {
+      const m = String(args?.method || "stripe");
+      const email = String(args?.paypalEmail || args?.paypal_email || "").trim();
+      if (m === "paypal") {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "invalid_paypal_email" };
+        // mask like the server does: keep first char + domain
+        const [u, host] = email.split("@");
+        demoMethod.payout_method = "paypal";
+        demoMethod.paypal_email = `${u[0]}***@${host}`;
+        return { ok: true, payout_method: "paypal", paypal_email: demoMethod.paypal_email, paypal_email_set: true };
+      }
+      demoMethod.payout_method = "stripe";
+      return { ok: true, payout_method: "stripe", paypal_email: demoMethod.paypal_email, paypal_email_set: !!demoMethod.paypal_email };
+    }
     case "ad_preview": { const a = ADS[Math.floor(Date.now() / 20000) % ADS.length]; return { id: "house-demo", text: a.text, url: "https://" + a.url, campaign: false, cpm: 8 }; }
     case "get_oss_config": return { ...demoOss };
     case "set_donate_pct": demoOss.donate_pct = Math.max(0, Math.min(100, Number(args?.pct) || 0)); return { donate_pct: demoOss.donate_pct, synced: true };
@@ -263,13 +284,17 @@ async function renderHome() {
     <div class="card">
       <h3>${S.installed ? "Installed" : "Not installed"}</h3>
       <div class="hint">${S.installed ? "Wired into Claude Code. Restart it after changes." : "Adds the sponsor line to <code>~/.claude/settings.json</code> — non-destructive; your existing status line is preserved."}</div>
+      ${S.installed ? (S.chain ? `<div class="hint">Chaining your existing status line — it renders first, the sponsor line below it.</div>` : "") : `<label class="chain-toggle"><input type="checkbox" id="chain" ${S.chain ? "checked" : ""}><span>Keep my existing status line — render the sponsor line below it (chain)</span></label>`}
       <div class="btn-row">
         ${S.installed ? `<button class="btn ghost" id="uninstall">Uninstall</button>` : `<button class="btn" id="install">Install status line</button>`}
         <button class="btn ghost" id="reveal-cli">Show CLI path</button>
       </div>
       <div class="msg" id="m"></div>
     </div>`;
-  document.getElementById("install")?.addEventListener("click", () => act("install_statusline", { cliPath: S.cli_path || null }, "Installed. Restart Claude Code."));
+  document.getElementById("install")?.addEventListener("click", () => act(
+    "install_statusline",
+    { cliPath: S.cli_path || null, chain: (document.getElementById("chain") as HTMLInputElement | null)?.checked || false },
+    "Installed. Restart Claude Code."));
   document.getElementById("uninstall")?.addEventListener("click", () => {
     if (!confirm("Remove the Cogwait sponsor line from Claude Code?\n\nYour settings.json is restored and nothing renders or earns until you install again.")) return;
     act("uninstall_statusline", {}, "Removed the status line.");
@@ -295,12 +320,30 @@ async function renderEarnings() {
       </div>
       <div class="msg" id="m">${S.has_key || S.mock ? "Loading…" : "Register in Setup first to load earnings."}</div>
     </div>
+    <div class="card hidden" id="method-card">
+      <h3>Cash-out method</h3>
+      <div class="hint">Where your cash-outs are sent. Minimum cash-out is <b id="method-min">$—</b>.</div>
+      <div class="method-current" id="method-current" data-linked="no">—</div>
+      <div class="method-grid">
+        <div class="method-rail">
+          <div class="rail-h">Bank account or card</div>
+          <p class="note">Linked securely through Stripe — it verifies the account. Use <b>Connect Stripe</b> above to start.</p>
+        </div>
+        <div class="method-rail">
+          <div class="rail-h">PayPal</div>
+          <label class="field"><input type="text" id="paypal-email" inputmode="email" autocomplete="off" placeholder="you@example.com"></label>
+          <button class="btn" id="paypal-save">Use PayPal</button>
+        </div>
+      </div>
+      <div class="msg" id="method-msg"></div>
+    </div>
     <div class="card"><h3>Payout history</h3>
       <table class="hist"><thead><tr><th>Date</th><th>Amount</th><th>Transfer</th></tr></thead><tbody id="hist"><tr><td colspan="3" class="note">—</td></tr></tbody></table>
     </div>`;
   document.getElementById("reload")?.addEventListener("click", loadEarnings);
   document.getElementById("pay")?.addEventListener("click", doPayout);
   document.getElementById("onboard")?.addEventListener("click", doOnboard);
+  document.getElementById("paypal-save")?.addEventListener("click", setPaypal);
   // The shimmer is only honest while a request is actually in flight — with no
   // key there is nothing to wait for, so clear it immediately.
   if (S.has_key || S.mock) loadEarnings(); else clearSkeletons();
@@ -328,8 +371,58 @@ async function loadEarnings() {
     const payBtn = document.getElementById("pay") as HTMLButtonElement;
     if (payBtn) payBtn.disabled = !canPay;
     renderHistory(d.payouts || []);
+    renderMethod(d);
     msg("m", canPay ? "Eligible for payout." : `$${((d.min_payout_usd || 0) - (d.balance_usd || 0)).toFixed(2)} to go until payout.`, "info");
   } catch (e) { clearSkeletons(); msg("m", String(e), "err"); }
+}
+// Cash-out method card — graceful degradation if this backend predates §10:
+// no `payout_method` field means the endpoint isn't there, so hide the card
+// entirely (mirrors the web dashboard + the Fund-OSS panel's "unavailable" path).
+function renderMethod(d: any) {
+  const card = document.getElementById("method-card");
+  if (!card) return;
+  const available = d.payout_method !== undefined;
+  card.classList.toggle("hidden", !available);
+  if (!available) return;
+  const min = document.getElementById("method-min");
+  if (min) min.textContent = "$" + (d.min_payout_usd ?? 0);
+  const method = d.payout_method === "paypal" ? "paypal" : "stripe";
+  const cur = document.getElementById("method-current") as HTMLElement | null;
+  if (cur) {
+    if (method === "paypal" && d.paypal_email) {
+      cur.textContent = `PayPal — ${d.paypal_email}`; cur.dataset.linked = "yes";
+    } else if (method === "stripe" && d.stripe_linked) {
+      cur.textContent = "Bank / card linked via Stripe"; cur.dataset.linked = "yes";
+    } else {
+      cur.textContent = "Not linked yet — choose a method below."; cur.dataset.linked = "no";
+    }
+  }
+  // Show the masked address the server already holds as the input placeholder.
+  const inp = document.getElementById("paypal-email") as HTMLInputElement | null;
+  if (inp && d.paypal_email) inp.placeholder = d.paypal_email;
+}
+// Set PayPal as the cash-out rail. Client-side format check mirrors the CLI +
+// server regex, so a fat-fingered address never leaves the app.
+async function setPaypal() {
+  const inp = document.getElementById("paypal-email") as HTMLInputElement | null;
+  const email = (inp?.value || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg("method-msg", "Enter a valid PayPal email.", "err"); return; }
+  const btn = document.getElementById("paypal-save") as HTMLButtonElement | null;
+  if (btn) btn.disabled = true;
+  msg("method-msg", "Saving…", "info");
+  try {
+    const d = await invoke<any>("set_payout_method", { method: "paypal", paypalEmail: email });
+    if (d.ok) {
+      if (inp) inp.value = "";
+      msg("method-msg", `PayPal set — cash-outs go to ${d.paypal_email || email}.`, "ok");
+      loadEarnings();
+    } else {
+      msg("method-msg", d.error === "unavailable"
+        ? "This backend doesn't support choosing a cash-out method yet."
+        : "Could not save PayPal: " + (d.error || "unknown error"), "err");
+    }
+  } catch (e) { msg("method-msg", String(e), "err"); }
+  finally { if (btn) btn.disabled = false; }
 }
 function renderHistory(payouts: any[]) {
   const tb = document.getElementById("hist")!;
@@ -544,7 +637,8 @@ function renderSetup() {
 }
 
 // ---- ABOUT ----
-function renderAbout() {
+async function renderAbout() {
+  const ver = await invoke<string>("app_version").catch(() => "");
   view().innerHTML = `
     <div class="view-head"><h2>About</h2><p>Honest, opt-in sponsorship for the terminal.</p></div>
     <div class="card"><h3>How it works</h3>
@@ -553,11 +647,19 @@ function renderAbout() {
     <div class="card"><h3>The honest part</h3>
       <p class="note" style="font-size:13px;line-height:1.75">Earnings are demand-gated: a real advertiser has to pay for the placement. The CPMs shown here are the tier rates, not a promise. Think coffee money, not a paycheck — and you can pause or uninstall in one click.</p>
     </div>
+    <div class="card"><h3>Version &amp; updates</h3>
+      <div class="about-meta">
+        <div><span class="k">Version</span><span class="v mono" id="ver">${ver ? esc(ver) : "—"}</span></div>
+        <div><span class="k">Support</span><a class="v" href="mailto:support@cogwait.io" id="support">support@cogwait.io</a></div>
+      </div>
+      <p class="note" style="margin-top:12px">Updates ship via GitHub once the repo is public.</p>
+    </div>
     <div class="card"><h3>Links</h3>
-      <div class="btn-row"><button class="btn ghost" id="repo">GitHub</button><button class="btn ghost" id="privacy">Privacy</button></div>
+      <div class="btn-row"><button class="btn ghost" id="repo">GitHub</button><button class="btn ghost" id="privacy">Privacy</button><button class="btn ghost" id="email">Email support</button></div>
     </div>`;
   document.getElementById("repo")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait"));
   document.getElementById("privacy")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait/blob/main/PRIVACY.md"));
+  document.getElementById("email")?.addEventListener("click", () => openUrl("mailto:support@cogwait.io"));
 }
 
 // ---- helpers ----

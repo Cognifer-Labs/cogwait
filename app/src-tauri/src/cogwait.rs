@@ -18,6 +18,30 @@ fn config_path() -> PathBuf {
 fn settings_path() -> PathBuf {
     home().join(".claude").join("settings.json")
 }
+// `~/.claude/settings.json.cogwait-bak` — byte-identical name to bin/setup.js's
+// backup target, so the CLI and the app share one pristine snapshot.
+fn settings_bak_path() -> PathBuf {
+    let mut s = settings_path().into_os_string();
+    s.push(".cogwait-bak");
+    PathBuf::from(s)
+}
+
+// Snapshot settings.json ONCE, before Cogwait ever modifies it, and never
+// overwrite that snapshot on a re-install. This is a recorded fix (mirrors
+// bin/setup.js's backup()): a second install must not replace the pristine copy
+// with an already-modified one, or the user's original statusLine becomes
+// unrecoverable. Best-effort — a failed copy never blocks the install.
+fn backup_settings() {
+    let sp = settings_path();
+    if !sp.exists() {
+        return;
+    }
+    let bak = settings_bak_path();
+    if bak.exists() {
+        return;
+    }
+    let _ = std::fs::copy(&sp, &bak);
+}
 
 // ---- owner-only file writes (dir 0700, file 0600), mirroring lib/client.js ----
 fn secure_write(path: &PathBuf, data: &str) -> std::io::Result<()> {
@@ -147,6 +171,10 @@ pub fn state() -> Value {
         "installed": statusline_installed(&settings),
         "config_path": config_path().to_string_lossy(),
         "settings_path": settings_path().to_string_lossy(),
+        // The user's own pre-existing statusLine command we chain under, if any
+        // (empty = not chaining). Lets the Status tab reflect + pre-check the
+        // "keep my existing status line" toggle.
+        "chain": cfg_str(&cfg, "chain"),
         "share": SHARE,
     })
 }
@@ -177,7 +205,10 @@ pub fn save_config(patch: Value) -> Result<Value, String> {
 }
 
 // ---- statusLine install / uninstall (patches ~/.claude/settings.json) ----
-pub fn install(cli_path: Option<String>) -> Result<Value, String> {
+// `chain` mirrors the CLI's `npx cogwait --chain`: when the user already has a
+// custom statusLine, remember its command in config (`chain`) so bin/statusline.js
+// runs it first and prints the sponsor line beneath it — instead of refusing.
+pub fn install(cli_path: Option<String>, chain: bool) -> Result<Value, String> {
     let cfg = read_json(&config_path());
     let path = cli_path.filter(|p| !p.is_empty()).unwrap_or_else(|| detect_cli_path(&cfg));
     if path.is_empty() {
@@ -188,12 +219,24 @@ pub fn install(cli_path: Option<String>) -> Result<Value, String> {
     }
     let mut settings = read_json(&settings_path());
     if !settings.is_object() { settings = json!({}); }
-    // Don't clobber a non-Cogwait statusLine the user already has.
+    // The user already has a non-Cogwait statusLine: chain under it, or refuse —
+    // never silently clobber it.
     if let Some(existing) = settings.get("statusLine").and_then(|s| s.get("command")).and_then(|c| c.as_str()) {
         if !existing.contains("statusline.js") {
-            return Err("You already have a custom statusLine. Remove it first, or use `npx cogwait --chain` in a terminal.".into());
+            if chain {
+                // Persist the user's own command exactly as-is. This is the same
+                // value bin/setup.js writes to config.chain under `--chain`, so
+                // the resulting settings.json + config.json are byte-equivalent
+                // to the CLI's chained install.
+                let existing_cmd = existing.to_string();
+                save_config(json!({ "chain": existing_cmd }))?;
+            } else {
+                return Err("You already have a custom statusLine. Turn on \"Keep my existing status line\" to chain it, or remove it first.".into());
+            }
         }
     }
+    // Back up the user's pristine settings ONCE before we touch it. Never clobbered.
+    backup_settings();
     settings["statusLine"] = json!({
         "type": "command",
         "command": format!("node \"{}\"", path),
@@ -214,11 +257,28 @@ pub fn uninstall() -> Result<Value, String> {
     let mut settings = read_json(&settings_path());
     let is_ours = statusline_installed(&settings);
     if is_ours {
+        // If we chained under the user's own statusLine, hand it back rather than
+        // just deleting ours — otherwise the user loses a statusLine they had
+        // before Cogwait. A non-chained install simply drops the key.
+        let cfg = read_json(&config_path());
+        let chained = cfg_str(&cfg, "chain");
         if let Some(obj) = settings.as_object_mut() {
-            obj.remove("statusLine");
+            if !chained.is_empty() {
+                obj.insert(
+                    "statusLine".to_string(),
+                    json!({ "type": "command", "command": chained }),
+                );
+            } else {
+                obj.remove("statusLine");
+            }
         }
         let s = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())? + "\n";
         std::fs::write(settings_path(), s).map_err(|e| e.to_string())?;
+        // Nothing left to chain once we're uninstalled — clear the saved command
+        // so a later reinstall starts clean.
+        if !chained.is_empty() {
+            let _ = save_config(json!({ "chain": "" }));
+        }
     }
     Ok(state())
 }
@@ -279,6 +339,37 @@ pub async fn payout() -> Result<Value, String> {
     let resp = client.post(&url).header("authorization", auth)
         .header("content-type", "application/json").body("{}").send().await
         .map_err(|e| format!("Cannot reach backend: {e}"))?;
+    resp.json::<Value>().await.map_err(|e| e.to_string())
+}
+
+// Choose the cash-out rail: 'stripe' (bank/card via Connect) or 'paypal' (to an
+// email). Mirrors lib/client.js's setPayoutMethod → POST /payout/method; the
+// server validates the method + email and clamps what it stores, so the client
+// can't aim money at a fat-fingered target. Graceful degradation, like the
+// Fund-OSS panel: an older backend without this endpoint (404) returns a
+// structured `{ ok:false, error:"unavailable" }` instead of a hard failure.
+pub async fn set_payout_method(method: String, paypal_email: Option<String>) -> Result<Value, String> {
+    let cfg = read_json(&config_path());
+    let auth = auth_header(&cfg).ok_or("Register first (need payout id + key).")?;
+    let mut body = json!({ "method": method });
+    if let Some(email) = paypal_email.as_ref().map(|e| e.trim()).filter(|e| !e.is_empty()) {
+        body["paypal_email"] = json!(email);
+    }
+    let url = format!("{}/payout/method", api_base(&cfg));
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("authorization", auth)
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Cannot reach backend: {e}"))?;
+    if resp.status().as_u16() == 404 {
+        return Ok(json!({ "ok": false, "error": "unavailable" }));
+    }
+    // Return the body verbatim (ok / payout_method / masked paypal_email, or an
+    // error field) so the UI can mirror the web dashboard's handling exactly.
     resp.json::<Value>().await.map_err(|e| e.to_string())
 }
 
