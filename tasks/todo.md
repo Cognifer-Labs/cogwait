@@ -809,8 +809,13 @@ Workstreams (parallel worktrees):
       hooks key dropped, README/PRIVACY/package.json/CI updated, GC allowlist
       kept for legacy sweep — committed 37c89b6, plugin validate + full suite
       green. (Agent's worktree was on the stale base — redone inline.)
-- [ ] F [main] CORS tighten attempt (prod env), final verify (npm test, cargo
-      check, vite build), merge + commits, todo checkboxes
+- [x] F prod: redeployed twice (user-approved) — new endpoints live
+      (/campaign/submit returns pending in prod), CORS env replaced with
+      explicit `https://cogwait.vercel.app` after discovering runtime still
+      had the deploy-time-baked `*` (env pull showed "" but runtime echoed any
+      origin; cache-busted probe proved it). Post-deploy verified: evil origin
+      → 403 no grant, own origin → exact echo, /health green. Fresh verifier
+      CONFIRMED all merged work; all suites green.
 
 Assumption (stated, not silent): support email `support@cogwait.io` — brand
 domain already used for `api.cogwait.io` prod default. Flag to user if wrong.
