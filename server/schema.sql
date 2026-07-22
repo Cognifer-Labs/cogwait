@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS publishers (
   created           bigint   NOT NULL,
   secret            text     NOT NULL,
   stripe_account    text,
-  donate_pct        numeric  NOT NULL DEFAULT 20  -- Fund-OSS give-back %, on by default
+  donate_pct        numeric  NOT NULL DEFAULT 20,       -- Fund-OSS give-back %, on by default
+  payout_method     text     NOT NULL DEFAULT 'stripe', -- cashout rail: 'stripe' | 'paypal'
+  paypal_email      text                                -- PayPal payout destination (when method = 'paypal')
 );
 
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -21,7 +23,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   cpm_usd               numeric NOT NULL,
   budget_usd            numeric NOT NULL,
   budget_remaining_usd  numeric NOT NULL,
-  status                text    NOT NULL,   -- 'pending' | 'approved'
+  -- Moderation state (AD_POLICY.md); only 'approved' is ever served.
+  status                text    NOT NULL,   -- 'pending' | 'approved' | 'rejected' | 'frozen'
   created               bigint  NOT NULL
 );
 
@@ -62,6 +65,8 @@ CREATE TABLE IF NOT EXISTS dedupe (
 -- already-deployed table — these ALTERs upgrade existing prod databases in
 -- place (store-pg.js applies the equivalent automatically on startup).
 ALTER TABLE publishers ADD COLUMN IF NOT EXISTS donate_pct numeric NOT NULL DEFAULT 20;
+ALTER TABLE publishers ADD COLUMN IF NOT EXISTS payout_method text NOT NULL DEFAULT 'stripe';
+ALTER TABLE publishers ADD COLUMN IF NOT EXISTS paypal_email text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'cashout';
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS fund text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'settled';

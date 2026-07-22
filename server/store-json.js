@@ -52,7 +52,8 @@ async function publisher(pid) {
     d.publishers[pid] = {
       id: pid, balance_usd: 0, impressions: 0, created: Date.now(),
       secret: crypto.randomBytes(24).toString('hex'), stripe_account: null,
-      donate_pct: 20 // Fund-OSS mode is on by default; the dev dials it down.
+      donate_pct: 20, // Fund-OSS mode is on by default; the dev dials it down.
+      payout_method: 'stripe', paypal_email: null // which rail the cashout leg uses
     };
     persist();
   }
@@ -72,6 +73,20 @@ async function setDonatePct(pid, pct) {
   persist();
   return p;
 }
+// Set the cashout rail. `method` must be 'stripe' or 'paypal' (anything else is
+// ignored, leaving the current rail). `paypal_email` is stored only when the
+// method is 'paypal' and looks like an address — the money can't be sent to a
+// destination the client fat-fingered.
+function plausibleEmail(s) {
+  return typeof s === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= 254;
+}
+async function setPayoutMethod(pid, method, email) {
+  const p = await publisher(pid);
+  if (method === 'stripe' || method === 'paypal') p.payout_method = method;
+  if (p.payout_method === 'paypal' && plausibleEmail(email)) p.paypal_email = email;
+  persist();
+  return p;
+}
 async function setBalance(pid, amount) {
   const p = await publisher(pid);
   p.balance_usd = round(amount); persist(); return p;
@@ -85,11 +100,37 @@ async function creditImpression(pid, amount, meta) {
   return p;
 }
 
+// Erase a publisher and everything attached to them (PRIVACY.md right to
+// removal). The caller (server/index.js) refuses while a balance or a pending
+// payout leg exists, so this only ever runs on a settled, zero-balance account.
+// Settled payout rows go too — they are the publisher's own financial history,
+// and the point of the request is that no record of them remains.
+async function deletePublisher(pid) {
+  const d = load();
+  if (!d.publishers[pid]) return false;
+  delete d.publishers[pid];
+  d.impressions = d.impressions.filter((i) => i.pid !== pid);
+  d.payouts = d.payouts.filter((r) => r.pid !== pid);
+  persist();
+  return true;
+}
+
 async function addCampaign(c) { const d = load(); d.campaigns[c.id] = c; persist(); return c; }
 async function getCampaign(id) { return load().campaigns[id]; }
 async function allCampaigns() { return Object.values(load().campaigns); }
 async function activeCampaigns() {
   return Object.values(load().campaigns).filter((c) => c.status === 'approved' && c.budget_remaining_usd > 0);
+}
+// Moderation (AD_POLICY.md): approve / reject / freeze. Returns null for an
+// unknown campaign so the caller can 404. Budget is deliberately untouched — a
+// frozen campaign stops serving (activeCampaigns only returns 'approved') but
+// keeps its remaining budget for an un-freeze or an out-of-band refund.
+async function setCampaignStatus(id, status) {
+  const c = load().campaigns[id];
+  if (!c) return null;
+  c.status = status;
+  persist();
+  return c;
 }
 async function spendCampaign(id, amount) {
   const c = load().campaigns[id];
@@ -206,8 +247,9 @@ async function close() { flush(); }
 
 module.exports = {
   backend: 'json', init, round,
-  publisher, getPublisher, setStripeAccount, setBalance, setDonatePct, creditImpression,
-  addCampaign, getCampaign, allCampaigns, activeCampaigns, spendCampaign,
+  publisher, getPublisher, setStripeAccount, setPayoutMethod, setBalance, setDonatePct, creditImpression,
+  deletePublisher,
+  addCampaign, getCampaign, allCampaigns, activeCampaigns, setCampaignStatus, spendCampaign,
   recordPayout, payoutsFor, pendingPayoutsFor, settlePayout, claimPayoutBatch, settlePayoutLeg,
   impressionsInWindow, dedupeSeen, close,
   flush, DB_PATH, DATA_DIR

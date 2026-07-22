@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { URL } = require('url');
 const store = require('./store');
 const stripe = require('../lib/stripe');
+const paypal = require('../lib/paypal');
 const levels = require('../lib/levels');
 
 const PORT = Number(process.env.PORT || 8787);
@@ -38,6 +39,49 @@ if (process.env.COGWAIT_TEST_FAIL_DONATE_ONCE === '1' && process.env.NODE_ENV ==
   throw new Error('COGWAIT_TEST_FAIL_DONATE_ONCE must never be set with NODE_ENV=production — it forces real donation transfers to fail.');
 }
 
+// CORS. web/dashboard.html is a static page that calls this API from another
+// origin with `Authorization: Publisher <id>:<key>`, which makes every call a
+// preflighted cross-origin request — without these headers the dashboard only
+// ever works when served from the API's own origin.
+//
+//   COGWAIT_ALLOWED_ORIGINS  comma-separated allowlist of origins permitted to
+//                            call the AUTHENTICATED routes, e.g.
+//                            "https://cogwait.dev,http://localhost:5173".
+//                            Unset = no cross-origin access to those routes
+//                            (same-origin dashboards still work). The literal
+//                            "*" allows any origin — opt-in, never the default.
+//
+// Genuinely public, unauthenticated routes (/health, /ad/next) answer `*`
+// unconditionally: they carry no secrets and no per-caller data. Everything
+// else echoes the request's Origin only when it is allowlisted, with
+// `Vary: Origin` so a cached response for one origin is never reused for
+// another. Access-Control-Allow-Credentials is never sent — this API
+// authenticates with a header, not cookies, so credentialed CORS (which
+// browsers forbid alongside `*` anyway) is not needed.
+const ALLOWED_ORIGINS = (process.env.COGWAIT_ALLOWED_ORIGINS || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const PUBLIC_CORS_PATHS = new Set(['/health', '/ad/next']);
+const CORS_METHODS = 'GET, POST, DELETE, OPTIONS';
+const CORS_ALLOW_HEADERS = 'authorization, content-type, x-admin-token';
+const CORS_MAX_AGE = String(Number(process.env.COGWAIT_CORS_MAX_AGE || 600));
+
+// Set the CORS response headers for this request and return the granted
+// Access-Control-Allow-Origin value (null = cross-origin access denied).
+// Headers set here survive the later res.writeHead(...) in send() — Node merges
+// setHeader values with the writeHead header object.
+function applyCors(req, res, p) {
+  if (PUBLIC_CORS_PATHS.has(p)) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return '*';
+  }
+  res.setHeader('Vary', 'Origin'); // response depends on Origin — never share a cache entry
+  const origin = req.headers['origin'];
+  if (!origin) return null;       // same-origin / non-browser caller: nothing to grant
+  if (!ALLOWED_ORIGINS.includes('*') && !ALLOWED_ORIGINS.includes(origin)) return null;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  return origin;
+}
+
 // Constant-time string comparison to avoid timing side channels on secrets.
 function safeEqual(a, b) {
   const ba = Buffer.from(String(a || ''));
@@ -54,6 +98,11 @@ async function authPublisher(req) {
   if (!rec || !rec.secret) return null;
   return safeEqual(m[2], rec.secret) ? rec : null;
 }
+
+// Campaign moderation states (AD_POLICY.md). Only 'approved' is ever served —
+// 'pending' is awaiting review, 'rejected' failed it, 'frozen' violated policy
+// after the fact (budget preserved, serving stopped).
+const CAMPAIGN_STATUSES = new Set(['pending', 'approved', 'rejected', 'frozen']);
 
 // Fraud/rate limits.
 const DEDUPE_MS = 10000;                 // same tag+ad within window = not billable (atomic in store)
@@ -106,6 +155,17 @@ function stripeTransfer(pid, amount, opts) {
 function stripeOnboard(pid) {
   return new Promise((resolve, reject) => stripe.onboard(pid, (e, r) => e ? reject(e) : resolve(r)));
 }
+function paypalPayout(email, amount, idempotencyKey) {
+  return new Promise((resolve, reject) => paypal.payout(email, amount, { idempotency_key: idempotencyKey }, (e, r) => e ? reject(e) : resolve(r)));
+}
+
+// Mask a payout email for display — never echo the raw stored address back to
+// the client verbatim (e.g. "jane@example.com" -> "j***@example.com").
+function maskEmail(email) {
+  if (typeof email !== 'string' || email.indexOf('@') < 1) return null;
+  const [user, domain] = email.split('@');
+  return user[0] + '***@' + domain;
+}
 
 // Test-only failure injection for the idempotency regression test (§8.0/§8.2):
 // forces the donation leg to fail exactly once per idempotency key, so a test
@@ -148,6 +208,24 @@ async function handler(req, res) {
     const u = new URL(req.url, `http://localhost:${PORT}`);
     const p = u.pathname;
 
+    const allowOrigin = applyCors(req, res, p);
+
+    // Preflight. Answered before rate limiting: a browser sends one per
+    // authenticated call and it touches no store, so counting it against the
+    // caller's budget would halve the effective rate limit. A disallowed origin
+    // gets a bare 403 with no Access-Control-* grant, so the real request is
+    // never even attempted.
+    if (req.method === 'OPTIONS') {
+      if (!allowOrigin) { res.writeHead(403, { 'Content-Length': '0' }); return res.end(); }
+      res.writeHead(204, {
+        'Access-Control-Allow-Methods': CORS_METHODS,
+        'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS,
+        'Access-Control-Max-Age': CORS_MAX_AGE,
+        'Content-Length': '0'
+      });
+      return res.end();
+    }
+
     if (rateLimited(clientKey(req))) return send(res, 429, { error: 'rate_limited' });
 
     if (p === '/health') return send(res, 200, {
@@ -159,7 +237,8 @@ async function handler(req, res) {
         per_impression_usd: store.round(perImpression(L.id))
       })),
       per_impression_usd: store.round(perImpression(levels.DEFAULT_LEVEL)),
-      stripe_live: stripe.live
+      stripe_live: stripe.live,
+      paypal_live: paypal.live
     });
 
     if (p === '/ad/next' && req.method === 'GET') {
@@ -221,6 +300,9 @@ async function handler(req, res) {
         publisher_id: auth.id, impressions: auth.impressions, balance_usd: auth.balance_usd,
         min_payout_usd: MIN_PAYOUT_USD, created: auth.created || null,
         donate_pct: auth.donate_pct,
+        payout_method: auth.payout_method || 'stripe',
+        paypal_email: maskEmail(auth.paypal_email),   // masked — never the raw address
+        stripe_linked: !!auth.stripe_account,
         payouts,
         donations: payouts.filter((r) => r.kind === 'donation')
       });
@@ -235,6 +317,28 @@ async function handler(req, res) {
       const pct = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : pub.donate_pct;
       const updated = await store.setDonatePct(pub.id, pct);
       return send(res, 200, { ok: true, donate_pct: updated.donate_pct });
+    }
+
+    // POST /payout/method — choose the cashout rail. body { method, paypal_email? }.
+    // 'stripe' cashes out to the Connect account linked via /connect/onboard;
+    // 'paypal' cashes out to the given PayPal email. The store validates the
+    // method and email — a bad method leaves the rail unchanged, a bad email is
+    // dropped (never persisted), so money can't be aimed at a fat-fingered target.
+    if (p === '/payout/method' && req.method === 'POST') {
+      const b = await readBody(req);
+      const pub = await authPublisher(req);
+      if (!pub) return send(res, 401, { error: 'unauthorized' });
+      if (b.method !== 'stripe' && b.method !== 'paypal') return send(res, 400, { error: 'invalid_method' });
+      if (b.method === 'paypal' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.paypal_email || ''))) {
+        return send(res, 400, { error: 'invalid_paypal_email' });
+      }
+      const updated = await store.setPayoutMethod(pub.id, b.method, b.paypal_email);
+      return send(res, 200, {
+        ok: true,
+        payout_method: updated.payout_method,
+        paypal_email: maskEmail(updated.paypal_email),
+        paypal_email_set: !!updated.paypal_email
+      });
     }
 
     // POST /payout — pay out the publisher's balance via Stripe (real or simulated),
@@ -273,7 +377,10 @@ async function handler(req, res) {
       }
 
       let cashoutRow = claim.cashoutRow, donationRow = claim.donationRow;
-      const stripeAccount = claim.pub ? claim.pub.stripe_account : pub.stripe_account;
+      const clPub = claim.pub || pub;
+      const stripeAccount = clPub.stripe_account;
+      const payoutMethod = clPub.payout_method === 'paypal' ? 'paypal' : 'stripe';
+      const paypalEmail = clPub.paypal_email;
       let failed = false, simulated = false;
 
       // Attempt only legs not yet settled (claimPayoutBatch's resume path only
@@ -290,9 +397,13 @@ async function handler(req, res) {
       // same money. There is no such gap anymore.
       if (cashoutRow && cashoutRow.status !== 'settled') {
         try {
-          const result = await stripeTransfer(pid, cashoutRow.amount_usd, {
-            stripe_account: stripeAccount, idempotency_key: cashoutRow.idempotency_key
-          });
+          // Route the cashout (keep) leg to the publisher's chosen rail. A live
+          // rail with no linked destination throws inside the adapter
+          // (no_connected_account / no_paypal_email) → caught below → 502, row
+          // stays pending, safely retryable — never a transfer to nowhere.
+          const result = payoutMethod === 'paypal'
+            ? await paypalPayout(paypalEmail, cashoutRow.amount_usd, cashoutRow.idempotency_key)
+            : await stripeTransfer(pid, cashoutRow.amount_usd, { stripe_account: stripeAccount, idempotency_key: cashoutRow.idempotency_key });
           const settled = await store.settlePayoutLeg(pid, cashoutRow.id, {
             transfer: result.id, simulated: !!result.simulated, status: 'settled'
           });
@@ -319,7 +430,7 @@ async function handler(req, res) {
 
       if (failed) return send(res, 502, { error: 'payout_failed', partial: true });
 
-      log(`payout pub=${pid} keep=$${cashoutRow ? cashoutRow.amount_usd.toFixed(4) : '0'} donate=$${donationRow ? donationRow.amount_usd.toFixed(4) : '0'} ${simulated ? '(simulated)' : ''}`);
+      log(`payout pub=${pid} rail=${payoutMethod} keep=$${cashoutRow ? cashoutRow.amount_usd.toFixed(4) : '0'} donate=$${donationRow ? donationRow.amount_usd.toFixed(4) : '0'} ${simulated ? '(simulated)' : ''}`);
       return send(res, 200, {
         ok: true,
         paid_usd: cashoutRow ? cashoutRow.amount_usd : 0,
@@ -327,6 +438,40 @@ async function handler(req, res) {
         transfers: { cashout: cashoutRow ? cashoutRow.transfer : null, donation: donationRow ? donationRow.transfer : null },
         simulated
       });
+    }
+
+    // DELETE /publisher — erase the authenticated publisher and their records
+    // (PRIVACY.md: "request removal of your publisher_id and its records at any
+    // time"). Requires the publisher's own key — there is no admin override, so
+    // nobody else can delete an account out from under them.
+    //
+    // Refuses while money is still owed: an unsettled payout leg is mid-flight
+    // at Stripe/PayPal (deleting it would strand a transfer with no ledger row
+    // to resume from), and a non-zero balance is the publisher's money. Both
+    // return 409 telling them to cash out first — deletion must never be a
+    // silent way to destroy a balance.
+    if (p === '/publisher' && req.method === 'DELETE') {
+      const pub = await authPublisher(req);
+      if (!pub) return send(res, 401, { error: 'unauthorized' });
+      const pending = await store.pendingPayoutsFor(pub.id);
+      if (pending.length) {
+        return send(res, 409, {
+          error: 'payout_pending',
+          detail: 'A payout is still in flight. Retry POST /payout until it settles, then delete.',
+          pending_legs: pending.length
+        });
+      }
+      if (pub.balance_usd > 0) {
+        return send(res, 409, {
+          error: 'balance_outstanding',
+          detail: 'Cash out your balance with POST /payout before deleting your account.',
+          balance_usd: pub.balance_usd,
+          min_payout_usd: MIN_PAYOUT_USD
+        });
+      }
+      await store.deletePublisher(pub.id);
+      log(`publisher deleted pub=${pub.id}`);
+      return send(res, 200, { ok: true, deleted: true, publisher_id: pub.id });
     }
 
     // POST /campaign — advertiser creates a campaign (admin-gated in this stub).
@@ -346,6 +491,26 @@ async function handler(req, res) {
         created: Date.now()
       };
       await store.addCampaign(c);
+      return send(res, 200, { ok: true, campaign: c });
+    }
+
+    // POST /campaign/status — moderation (AD_POLICY.md): approve a reviewed
+    // campaign, reject it, or freeze one that turns out to violate policy.
+    // Admin-gated, same token as campaign creation. Only 'approved' campaigns
+    // with budget left are ever served (store.activeCampaigns), so freezing or
+    // rejecting takes a campaign out of rotation immediately without touching
+    // its budget — a frozen campaign's remaining budget is preserved so it can
+    // be un-frozen (back to 'pending'/'approved') or refunded out of band.
+    if (p === '/campaign/status' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (!safeEqual(req.headers['x-admin-token'] || '', ADMIN_TOKEN)) return send(res, 403, { error: 'forbidden' });
+      if (!b.id) return send(res, 400, { error: 'missing_fields' });
+      if (!CAMPAIGN_STATUSES.has(b.status)) {
+        return send(res, 400, { error: 'invalid_status', allowed: [...CAMPAIGN_STATUSES] });
+      }
+      const c = await store.setCampaignStatus(b.id, b.status);
+      if (!c) return send(res, 404, { error: 'unknown_campaign' });
+      log(`campaign ${c.id} status=${c.status}`);
       return send(res, 200, { ok: true, campaign: c });
     }
 
@@ -369,6 +534,7 @@ async function handler(req, res) {
       try { result = await stripeOnboard(pub.id); }
       catch (e) { return send(res, 502, { error: 'onboard_failed', detail: e.message }); }
       await store.setStripeAccount(pub.id, result.account);
+      await store.setPayoutMethod(pub.id, 'stripe'); // linking a bank/card selects the Stripe rail
       return send(res, 200, { ok: true, url: result.url, account: result.account, simulated: !!result.simulated });
     }
 

@@ -9,13 +9,80 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// ---- flag surface -------------------------------------------------------
+// Every flag Cogwait accepts, in one place, so `--help` can print them and an
+// unknown flag can be rejected. Without this, ANY unrecognized argument fell
+// through to the default action — installing the statusLine — so a typo or a
+// plain `--help` silently rewrote the user's ~/.claude/settings.json.
+const FLAGS = [
+  ['--help, -h', 'Show this help and exit.'],
+  ['--status', 'Print current config: level, give-back %, payout id, install state.'],
+  ['--version', 'Print the Cogwait version.'],
+  ['--doctor', 'Diagnose the install (same checks as the desktop app Status tab).'],
+  ['--register', 'Register with the backend and store your publisher key.'],
+  ['--earnings', 'Print your balance, impressions, effective CPM and payout history.'],
+  ['--cashout', 'Pay your balance out (asks for confirmation; --yes to skip).'],
+  ['--level <0-5>', 'Set the ad tier. Higher = more prominent line = higher CPM.'],
+  ['--chain', 'Keep an existing statusLine; render the sponsor line below it.'],
+  ['--uninstall', 'Remove the Cogwait statusLine from ~/.claude/settings.json.'],
+  ['--oss', 'Scan this project locally and print a maintainer give-back receipt.'],
+  ['--donate <pct>', 'Set the Fund-OSS give-back percentage (0-100).'],
+  ['--connect', 'Link a bank account or card for cash-outs (Stripe Connect).'],
+  ['--paypal <email>', 'Use PayPal for cash-outs.'],
+];
+const KNOWN = new Set([
+  '--help', '-h', '--status', '--version', '--doctor', '--register', '--level',
+  '--chain', '--uninstall', '--oss', '--donate', '--connect', '--paypal',
+  '--earnings', '--cashout', '--yes', '-y',
+]);
+
+function usage() {
+  const pkg = require('../package.json');
+  console.log(`cogwait ${pkg.version} — one opt-in sponsor line in your Claude Code status row.`);
+  console.log('');
+  console.log('Usage:  npx cogwait [flags]');
+  console.log('        npx cogwait            install the status line (no flags)');
+  console.log('');
+  console.log('Flags:');
+  for (const [flag, desc] of FLAGS) console.log(`  ${flag.padEnd(18)} ${desc}`);
+  console.log('');
+  console.log('Environment:');
+  console.log('  COGWAIT_MOCK=1        local demo ads, nothing sent to any backend');
+  console.log('  COGWAIT_DISABLED=1    pause rendering and billing');
+  console.log('  COGWAIT_PAYOUT_ID     your publisher id');
+  console.log('  COGWAIT_LEVEL         override the ad tier for one run');
+  console.log('');
+  console.log('Privacy: your prompts, code, and files are never sent. See PRIVACY.md.');
+}
+
+if (process.argv.includes('--help') || process.argv.includes('-h')) { usage(); return; }
+if (process.argv.includes('--version')) { console.log(require('../package.json').version); return; }
+
+// Reject anything we don't know rather than falling through to "install".
+const unknown = process.argv.slice(2).filter((a) => a.startsWith('-') && !KNOWN.has(a.split('=')[0]));
+if (unknown.length) {
+  console.error('Unknown option: ' + unknown.join(', '));
+  console.error('Run `npx cogwait --help` to see the available flags.');
+  process.exit(2);
+}
+
+// Report the current state without changing anything.
+if (process.argv.includes('--status')) { require('./status.js'); return; }
 // Delegate to the doctor if requested.
 if (process.argv.includes('--doctor')) { require('./doctor.js'); return; }
 // Register with the backend to obtain a publisher key, then store it in config.
 if (process.argv.includes('--register')) { require('./register.js'); return; }
+// Read the ledger (--earnings), or move the money (--cashout, confirmation-gated).
+if (process.argv.includes('--earnings')) { require('./earnings.js'); return; }
+if (process.argv.includes('--cashout')) { require('./cashout.js'); return; }
 // Fund-OSS: local dependency scan + receipt (--oss), or set the give-back % (--donate <pct>).
 if (process.argv.includes('--oss') || process.argv.some((a) => a === '--donate' || a.startsWith('--donate='))) {
   require('./oss.js'); return;
+}
+// Cash-out rails: link a bank/card via Stripe Connect (--connect), or set the
+// PayPal payout email (--paypal <email>).
+if (process.argv.includes('--connect') || process.argv.some((a) => a === '--paypal' || a.startsWith('--paypal='))) {
+  require('./connect.js'); return;
 }
 
 const HOME = os.homedir();
@@ -53,9 +120,14 @@ function readSettings() {
   catch (_) { return {}; }
 }
 
+// The backup exists to recover the user's settings as they were BEFORE Cogwait
+// ever touched them. Re-running install must therefore never overwrite it — the
+// second run would replace the pristine snapshot with an already-modified one
+// and the original statusLine would be unrecoverable.
 function backup() {
   if (!fs.existsSync(SETTINGS)) return null;
   const bak = `${SETTINGS}.cogwait-bak`;
+  if (fs.existsSync(bak)) return bak;
   try { fs.copyFileSync(SETTINGS, bak); return bak; } catch (_) { return null; }
 }
 

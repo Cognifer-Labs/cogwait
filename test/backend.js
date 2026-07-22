@@ -16,10 +16,20 @@ const PUB = 'be-pub';
 const ADMIN = 'test-admin';
 const ROOT = path.resolve(__dirname, '..');
 
+// Origins the server under test will accept for the authenticated routes; the
+// disallowed-origin assertions below use ORIGIN_BAD, which is deliberately absent.
+const ORIGIN_OK = 'https://dash.example.test';
+const ORIGIN_BAD = 'https://evil.example.test';
+
 const env = Object.assign({}, process.env, {
+  // HOME is redirected at the temp dir too: the store falls back to
+  // ~/.cogwait/server when COGWAIT_DATA_DIR is unset, and a test must never be
+  // one typo away from writing into the real home directory.
+  HOME: DATA_DIR,
   PORT: String(PORT), COGWAIT_DATA_DIR: DATA_DIR, COGWAIT_QUIET: '1',
   COGWAIT_ADMIN_TOKEN: ADMIN, COGWAIT_MIN_PAYOUT: '0.001', COGWAIT_CPM: '2', COGWAIT_SHARE: '0.7',
   COGWAIT_RATE_MAX: '1000',
+  COGWAIT_ALLOWED_ORIGINS: `${ORIGIN_OK}, http://localhost:5173`,
   // Test-only hook (server/index.js): fails the donation leg exactly once per
   // idempotency key, so the partial-failure/idempotency test below is
   // deterministic without a real Stripe outage. Publisher PUB's donate_pct is
@@ -34,7 +44,7 @@ function call(method, p, body, headers) {
       method, headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {})
     }, (res) => {
       let d = ''; res.on('data', (c) => d += c);
-      res.on('end', () => { let j = null; try { j = JSON.parse(d); } catch (_) {} resolve({ code: res.statusCode, json: j }); });
+      res.on('end', () => { let j = null; try { j = JSON.parse(d); } catch (_) {} resolve({ code: res.statusCode, json: j, headers: res.headers }); });
     });
     req.on('error', reject);
     if (data) req.write(data);
@@ -143,6 +153,61 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     assert(onb.code === 200 && onb.json.simulated === true && /^acct_sim_/.test(onb.json.account), 'connect onboarding returns a simulated account + url');
     const noauthOnb = await call('POST', '/connect/onboard', {});
     assert(noauthOnb.code === 401, 'onboarding requires auth');
+    // Onboarding selects the Stripe rail for that publisher.
+    const onbEarn = await call('GET', '/earnings', null, AUTH2);
+    assert(onbEarn.json.payout_method === 'stripe' && onbEarn.json.stripe_linked === true,
+      'onboarding sets payout_method=stripe and marks stripe_linked');
+
+    // --- Payout method: PayPal rail (simulated, no creds) ---
+    {
+      const ppReg = await call('POST', '/session/init', { publisher_id: 'pp-pub' });
+      assert(ppReg.code === 200 && ppReg.json.secret, 'pp-pub registered');
+      const PP = { authorization: `Publisher pp-pub:${ppReg.json.secret}` };
+
+      // New publishers default to the Stripe rail.
+      const ppInit = await call('GET', '/earnings', null, PP);
+      assert(ppInit.json.payout_method === 'stripe', 'new publisher defaults to the stripe rail');
+
+      // /payout/method requires auth and validates its inputs.
+      const noauthMethod = await call('POST', '/payout/method', { method: 'paypal', paypal_email: 'x@y.com' });
+      assert(noauthMethod.code === 401, 'payout/method requires auth');
+      const badMethod = await call('POST', '/payout/method', { method: 'venmo' }, PP);
+      assert(badMethod.code === 400 && badMethod.json.error === 'invalid_method', 'unknown payout method rejected');
+      const badEmail = await call('POST', '/payout/method', { method: 'paypal', paypal_email: 'not-an-email' }, PP);
+      assert(badEmail.code === 400 && badEmail.json.error === 'invalid_paypal_email', 'paypal without a valid email rejected');
+
+      // Set the PayPal rail with a valid email.
+      const setPp = await call('POST', '/payout/method', { method: 'paypal', paypal_email: 'jane@example.com' }, PP);
+      assert(setPp.code === 200 && setPp.json.payout_method === 'paypal' && setPp.json.paypal_email_set === true,
+        'paypal rail set with an email');
+      assert(setPp.json.paypal_email === 'j***@example.com', 'response masks the paypal email, never echoes it raw');
+      const ppEarn = await call('GET', '/earnings', null, PP);
+      assert(ppEarn.json.payout_method === 'paypal' && ppEarn.json.paypal_email === 'j***@example.com',
+        'earnings reports the paypal rail with a masked email');
+
+      // Plain single-leg cashout (donate 0) settles via the PayPal sim rail.
+      await call('POST', '/donate/config', { donate_pct: 0 }, PP);
+      for (let i = 0; i < 3; i++) {
+        await call('POST', '/impression',
+          { session_tag: `pp-tag-${i}`, ad_id: campId, surface: 'statusline', level: 3, ts: Date.now() }, PP);
+      }
+      const ppPay = await call('POST', '/payout', {}, PP);
+      assert(ppPay.code === 200 && ppPay.json.paid_usd > 0 && ppPay.json.simulated === true, `paypal payout simulated $${ppPay.json.paid_usd}`);
+      assert(/^sim_pp_/.test(ppPay.json.transfers.cashout || ''), 'cashout leg settled via the PayPal sim rail (transfer id sim_pp_*)');
+      const ppAfter = await call('GET', '/earnings', null, PP);
+      assert(ppAfter.json.balance_usd === 0, 'balance zeroed after paypal payout');
+      const ppRow = ppAfter.json.payouts.find((r) => r.kind === 'cashout');
+      assert(ppRow && /^sim_pp_/.test(ppRow.transfer), 'recorded cashout row carries the PayPal transfer id');
+    }
+
+    // --- Minimum payout enforcement ($10 default; this test env sets it low) ---
+    {
+      const minReg = await call('POST', '/session/init', { publisher_id: 'min-pub' });
+      const MIN = { authorization: `Publisher min-pub:${minReg.json.secret}` };
+      const minPay = await call('POST', '/payout', {}, MIN); // zero balance → under minimum
+      assert(minPay.code === 400 && minPay.json.error === 'below_minimum', 'payout under the minimum is rejected');
+      assert(typeof minPay.json.min_payout_usd === 'number', 'below_minimum response reports the minimum');
+    }
 
     // Advertiser stats require admin and report spend.
     const noAdminStats = await call('GET', '/campaign/stats');
@@ -283,6 +348,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
       const PG_PORT = 8802;
       const pgEnv = Object.assign({}, process.env, {
+        HOME: DATA_DIR,
         PORT: String(PG_PORT), DATABASE_URL: pgUrl, COGWAIT_QUIET: '1',
         COGWAIT_ADMIN_TOKEN: ADMIN, COGWAIT_MIN_PAYOUT: '0.001', COGWAIT_CPM: '2', COGWAIT_SHARE: '0.7',
         COGWAIT_RATE_MAX: '10000', COGWAIT_TEST_FAIL_DONATE_ONCE: ''
@@ -328,6 +394,147 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         pgServer.kill();
       }
     })();
+
+    // --- CORS: the dashboard is a cross-origin page sending an auth header ---
+    {
+      // Preflight from an allowlisted origin: 204 + the grant the browser needs.
+      const pre = await call('OPTIONS', '/earnings', null, {
+        origin: ORIGIN_OK,
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization'
+      });
+      assert(pre.code === 204, `preflight from an allowlisted origin returns 204 (got ${pre.code})`);
+      assert(pre.headers['access-control-allow-origin'] === ORIGIN_OK, 'preflight echoes the allowlisted origin');
+      const allowHdrs = (pre.headers['access-control-allow-headers'] || '').toLowerCase();
+      assert(allowHdrs.includes('authorization') && allowHdrs.includes('content-type'),
+        'preflight allows the authorization and content-type headers');
+      const allowMethods = (pre.headers['access-control-allow-methods'] || '').toUpperCase();
+      assert(['GET', 'POST', 'DELETE', 'OPTIONS'].every((m) => allowMethods.includes(m)),
+        `preflight allows the API's methods (${allowMethods})`);
+      assert(Number(pre.headers['access-control-max-age']) > 0, 'preflight is cacheable (max-age set)');
+      assert(pre.headers['access-control-allow-credentials'] === undefined,
+        'credentials are never allowed (header-auth API, and never valid with a wildcard)');
+
+      // A disallowed origin gets no grant at all — neither on the preflight nor
+      // on the real request, so a hostile page can't read a publisher's earnings.
+      const preBad = await call('OPTIONS', '/earnings', null, {
+        origin: ORIGIN_BAD, 'access-control-request-method': 'GET'
+      });
+      assert(preBad.code === 403, `preflight from a disallowed origin is refused (got ${preBad.code})`);
+      assert(preBad.headers['access-control-allow-origin'] === undefined,
+        'disallowed origin is not echoed on the preflight');
+
+      const reg = await call('POST', '/session/init', { publisher_id: 'cors-pub' });
+      const CORS_AUTH = { authorization: `Publisher cors-pub:${reg.json.secret}` };
+      const okReq = await call('GET', '/earnings', null, Object.assign({ origin: ORIGIN_OK }, CORS_AUTH));
+      assert(okReq.code === 200 && okReq.headers['access-control-allow-origin'] === ORIGIN_OK,
+        'authenticated response echoes the allowlisted origin');
+      assert((okReq.headers['vary'] || '').includes('Origin'),
+        'authenticated response sets Vary: Origin so caches never cross origins');
+      assert(okReq.headers['access-control-allow-origin'] !== '*',
+        'authenticated routes are never wildcarded');
+
+      const badReq = await call('GET', '/earnings', null, Object.assign({ origin: ORIGIN_BAD }, CORS_AUTH));
+      assert(badReq.headers['access-control-allow-origin'] === undefined,
+        'disallowed origin is not echoed on the real request either');
+
+      // Public, unauthenticated routes stay open to any origin.
+      const health = await call('GET', '/health', null, { origin: ORIGIN_BAD });
+      assert(health.headers['access-control-allow-origin'] === '*', '/health is wildcard-open (public, no secrets)');
+      const adCors = await call('GET', '/ad/next?tag=cors', null, { origin: ORIGIN_BAD });
+      assert(adCors.headers['access-control-allow-origin'] === '*', '/ad/next is wildcard-open (public, no secrets)');
+    }
+
+    // --- Account deletion (PRIVACY.md right to removal) ---
+    {
+      const noauthDel = await call('DELETE', '/publisher');
+      assert(noauthDel.code === 401, 'delete without auth rejected');
+
+      const delReg = await call('POST', '/session/init', { publisher_id: 'del-pub' });
+      const DEL = { authorization: `Publisher del-pub:${delReg.json.secret}` };
+
+      // Earn a balance — deletion must refuse rather than silently destroy money.
+      await call('POST', '/impression',
+        { session_tag: 'del-tag', ad_id: campId, surface: 'statusline', level: 3, ts: Date.now() }, DEL);
+      const withBalance = await call('GET', '/earnings', null, DEL);
+      assert(withBalance.json.balance_usd > 0, `del-pub accrued balance $${withBalance.json.balance_usd}`);
+
+      const refused = await call('DELETE', '/publisher', null, DEL);
+      assert(refused.code === 409 && refused.json.error === 'balance_outstanding',
+        'deletion refused while a balance is outstanding');
+      assert(refused.json.balance_usd === withBalance.json.balance_usd,
+        'refusal reports the balance that must be cashed out first');
+      const stillThere = await call('GET', '/earnings', null, DEL);
+      assert(stillThere.json.balance_usd === withBalance.json.balance_usd, 'refused deletion left the money untouched');
+
+      // Cash out, then delete for real.
+      await call('POST', '/donate/config', { donate_pct: 0 }, DEL);
+      const cashout = await call('POST', '/payout', {}, DEL);
+      assert(cashout.code === 200, 'del-pub cashed out before deleting');
+
+      const del = await call('DELETE', '/publisher', null, DEL);
+      assert(del.code === 200 && del.json.deleted === true, 'deletion succeeds once the balance is clear');
+
+      // The key no longer authenticates anywhere.
+      const afterEarn = await call('GET', '/earnings', null, DEL);
+      assert(afterEarn.code === 401, "deleted publisher's key no longer authenticates");
+      const afterImp = await call('POST', '/impression',
+        { session_tag: 'del-tag2', ad_id: campId, surface: 'statusline' }, DEL);
+      assert(afterImp.code === 401, "deleted publisher's key can no longer earn");
+      const afterDel = await call('DELETE', '/publisher', null, DEL);
+      assert(afterDel.code === 401, 'deleting an already-deleted publisher is unauthorized, not a crash');
+
+      // Re-registering the same id issues a fresh secret — the old one stays dead.
+      const reReg = await call('POST', '/session/init', { publisher_id: 'del-pub' });
+      assert(reReg.code === 200 && reReg.json.registered === true && reReg.json.secret !== delReg.json.secret,
+        're-registering a deleted publisher_id issues a brand-new secret');
+      const reEarn = await call('GET', '/earnings', null, { authorization: `Publisher del-pub:${reReg.json.secret}` });
+      assert(reEarn.json.impressions === 0 && reEarn.json.payouts.length === 0,
+        'the deleted records are gone — the re-registered publisher starts clean');
+    }
+
+    // --- Campaign moderation (AD_POLICY.md pending → approved / rejected / frozen) ---
+    {
+      const noAdminMod = await call('POST', '/campaign/status', { id: campId, status: 'frozen' });
+      assert(noAdminMod.code === 403, 'campaign moderation requires the admin token');
+
+      const ADM = { 'x-admin-token': ADMIN };
+      const badStatus = await call('POST', '/campaign/status', { id: campId, status: 'banana' }, ADM);
+      assert(badStatus.code === 400 && badStatus.json.error === 'invalid_status', 'unknown campaign status rejected');
+      const unknown = await call('POST', '/campaign/status', { id: 'no-such-campaign', status: 'frozen' }, ADM);
+      assert(unknown.code === 404 && unknown.json.error === 'unknown_campaign', 'moderating an unknown campaign 404s');
+
+      // A newly created campaign defaults to pending and is NOT served.
+      const mod = await call('POST', '/campaign',
+        { id: 'mod-camp', text: 'Under review', url: 'https://example.test', budget_usd: 50 }, ADM);
+      assert(mod.code === 200 && mod.json.campaign.status === 'pending', 'new campaign starts pending review');
+      const adPending = await call('GET', '/ad/next?tag=mod1');
+      assert(adPending.json.id === campId, 'pending campaign is not served');
+
+      // Approve it and freeze the original — now only mod-camp is servable.
+      const approved = await call('POST', '/campaign/status', { id: 'mod-camp', status: 'approved' }, ADM);
+      assert(approved.code === 200 && approved.json.campaign.status === 'approved', 'campaign approved');
+      const frozen = await call('POST', '/campaign/status', { id: campId, status: 'frozen' }, ADM);
+      assert(frozen.code === 200 && frozen.json.campaign.status === 'frozen', 'violating campaign frozen');
+      assert(frozen.json.campaign.budget_remaining_usd > 0, 'freezing preserves the remaining budget (refundable)');
+      const adApproved = await call('GET', '/ad/next?tag=mod2');
+      assert(adApproved.json.id === 'mod-camp', 'approved campaign is served; the frozen one is not');
+
+      // Freeze the last approved campaign → fill falls back to house ads.
+      const frozen2 = await call('POST', '/campaign/status', { id: 'mod-camp', status: 'frozen' }, ADM);
+      assert(frozen2.code === 200 && frozen2.json.campaign.status === 'frozen', 'second campaign frozen');
+      const adHouse = await call('GET', '/ad/next?tag=mod3');
+      assert(adHouse.json.campaign === false, 'no approved campaign left → house ad served, never a frozen one');
+
+      // Rejected is likewise never served.
+      await call('POST', '/campaign/status', { id: 'mod-camp', status: 'rejected' }, ADM);
+      const adRejected = await call('GET', '/ad/next?tag=mod4');
+      assert(adRejected.json.campaign === false, 'rejected campaign is not served');
+
+      const modStats = await call('GET', '/campaign/stats', null, ADM);
+      const modRow = modStats.json.campaigns.find((c) => c.id === 'mod-camp');
+      assert(modRow && modRow.status === 'rejected', 'campaign stats reflect the moderated status');
+    }
 
     // Persistence: db.json exists on disk (write is debounced ~50ms).
     await sleep(150);

@@ -45,7 +45,8 @@ function mapPublisher(r) {
   return r && {
     id: r.id, balance_usd: round(r.balance_usd), impressions: Number(r.impressions),
     created: Number(r.created), secret: r.secret, stripe_account: r.stripe_account,
-    donate_pct: Number(r.donate_pct)
+    donate_pct: Number(r.donate_pct),
+    payout_method: r.payout_method || 'stripe', paypal_email: r.paypal_email || null
   };
 }
 function mapCampaign(r) {
@@ -67,7 +68,8 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS publishers (
   id text PRIMARY KEY, balance_usd numeric NOT NULL DEFAULT 0,
   impressions integer NOT NULL DEFAULT 0, created bigint NOT NULL,
-  secret text NOT NULL, stripe_account text, donate_pct numeric NOT NULL DEFAULT 20
+  secret text NOT NULL, stripe_account text, donate_pct numeric NOT NULL DEFAULT 20,
+  payout_method text NOT NULL DEFAULT 'stripe', paypal_email text
 );
 CREATE TABLE IF NOT EXISTS campaigns (
   id text PRIMARY KEY, advertiser text, text text NOT NULL, url text,
@@ -90,6 +92,8 @@ CREATE TABLE IF NOT EXISTS dedupe ( key text PRIMARY KEY, ts bigint NOT NULL );
 -- CREATE TABLE IF NOT EXISTS does NOT retrofit columns onto an already-deployed
 -- table — these ALTERs upgrade existing prod databases in place.
 ALTER TABLE publishers ADD COLUMN IF NOT EXISTS donate_pct numeric NOT NULL DEFAULT 20;
+ALTER TABLE publishers ADD COLUMN IF NOT EXISTS payout_method text NOT NULL DEFAULT 'stripe';
+ALTER TABLE publishers ADD COLUMN IF NOT EXISTS paypal_email text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'cashout';
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS fund text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'settled';
@@ -120,6 +124,24 @@ async function getPublisher(pid) {
 async function setStripeAccount(pid, acct) {
   await publisher(pid);
   const { rows } = await q(`UPDATE publishers SET stripe_account = $2 WHERE id = $1 RETURNING *`, [pid, acct || null]);
+  return mapPublisher(rows[0]);
+}
+// Set the cashout rail — mirrors store-json.js setPayoutMethod. `method` must be
+// 'stripe' or 'paypal' (anything else leaves the rail unchanged); `paypal_email`
+// is written only for a 'paypal' method with a plausible address.
+function plausibleEmail(s) {
+  return typeof s === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= 254;
+}
+async function setPayoutMethod(pid, method, email) {
+  await publisher(pid);
+  const sets = []; const vals = [pid]; let i = 2;
+  if (method === 'stripe' || method === 'paypal') { sets.push(`payout_method = $${i++}`); vals.push(method); }
+  if (method === 'paypal' && plausibleEmail(email)) { sets.push(`paypal_email = $${i++}`); vals.push(email); }
+  if (!sets.length) {
+    const { rows } = await q(`SELECT * FROM publishers WHERE id = $1`, [pid]);
+    return mapPublisher(rows[0]);
+  }
+  const { rows } = await q(`UPDATE publishers SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, vals);
   return mapPublisher(rows[0]);
 }
 async function setBalance(pid, amount) {
@@ -158,6 +180,25 @@ async function creditImpression(pid, amount, meta) {
   } finally { client.release(); }
 }
 
+// Erase a publisher and everything attached to them (PRIVACY.md right to
+// removal) — same contract as store-json.js deletePublisher. One transaction so
+// a crash can't leave orphaned impression/payout rows pointing at a publisher
+// that no longer exists. The caller refuses while a balance or a pending payout
+// leg exists, so this only ever runs on a settled, zero-balance account.
+async function deletePublisher(pid) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM impressions WHERE pid = $1`, [pid]);
+    await client.query(`DELETE FROM payouts WHERE pid = $1`, [pid]);
+    const { rowCount } = await client.query(`DELETE FROM publishers WHERE id = $1`, [pid]);
+    await client.query('COMMIT');
+    return rowCount > 0;
+  } catch (e) {
+    await client.query('ROLLBACK'); throw e;
+  } finally { client.release(); }
+}
+
 async function addCampaign(c) {
   await q(
     `INSERT INTO campaigns (id, advertiser, text, url, cpm_usd, budget_usd, budget_remaining_usd, status, created)
@@ -180,6 +221,14 @@ async function allCampaigns() {
 async function activeCampaigns() {
   const { rows } = await q(`SELECT * FROM campaigns WHERE status = 'approved' AND budget_remaining_usd > 0`);
   return rows.map(mapCampaign);
+}
+// Moderation (AD_POLICY.md): approve / reject / freeze — mirrors
+// store-json.js setCampaignStatus. Returns null for an unknown campaign so the
+// caller can 404. Budget is deliberately untouched: freezing stops serving
+// (activeCampaigns only returns 'approved') but preserves the remaining budget.
+async function setCampaignStatus(id, status) {
+  const { rows } = await q(`UPDATE campaigns SET status = $2 WHERE id = $1 RETURNING *`, [id, status]);
+  return rows.length ? mapCampaign(rows[0]) : null;
 }
 async function spendCampaign(id, amount) {
   const { rows } = await q(
@@ -370,8 +419,9 @@ async function close() { await pool.end(); }
 
 module.exports = {
   backend: 'postgres', init, round,
-  publisher, getPublisher, setStripeAccount, setBalance, setDonatePct, creditImpression,
-  addCampaign, getCampaign, allCampaigns, activeCampaigns, spendCampaign,
+  publisher, getPublisher, setStripeAccount, setPayoutMethod, setBalance, setDonatePct, creditImpression,
+  deletePublisher,
+  addCampaign, getCampaign, allCampaigns, activeCampaigns, setCampaignStatus, spendCampaign,
   recordPayout, payoutsFor, pendingPayoutsFor, settlePayout, claimPayoutBatch, settlePayoutLeg,
   impressionsInWindow, dedupeSeen, close
 };
