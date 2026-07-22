@@ -6,7 +6,8 @@
 // only reported because the sponsor line was actually rendered to the terminal.
 
 const client = require('../lib/client');
-const { renderAd } = require('../lib/render');
+const news = require('../lib/news');
+const { renderAd, renderNews } = require('../lib/render');
 
 // Never let a closed pipe crash the statusline (it runs inside Claude Code's capture).
 process.stdout.on('error', (e) => { if (e && e.code === 'EPIPE') process.exit(0); });
@@ -23,7 +24,13 @@ process.stdin.on('end', () => {
   const chained = renderChain(input);
 
   const ad = client.getCachedAd(sessionId); // sync cache read; refresh happens out of band
-  if (!ad) { process.stdout.write(chained); return; } // no ad -> only the chained output, nothing billed
+  if (!ad) {
+    // No ad -> unpaid AI-news fallback (never [sponsor], never reported as an
+    // impression). Nothing cached/enabled -> just the chained output, as before.
+    const item = news.getCachedNews();
+    process.stdout.write(item ? chained + renderNews(item) + '\n' : chained);
+    return; // nothing billed on this path
+  }
 
   const block = renderAd(ad, client.LEVEL);
   process.stdout.write(chained + block + '\n');

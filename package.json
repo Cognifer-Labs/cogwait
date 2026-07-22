@@ -22,7 +22,7 @@
     "setup": "node bin/setup.js",
     "serve": "node server/index.js",
     "doctor": "node bin/doctor.js",
-    "test": "node test/smoke.js && node test/client.js && node test/backend.js && node test/adapter.js && node test/store-interface.js && node test/platforms.js && node test/oss.js && node test/e2e.js",
+    "test": "node test/smoke.js && node test/client.js && node test/cli.js && node test/backend.js && node test/paypal.js && node test/adapter.js && node test/store-interface.js && node test/platforms.js && node test/oss.js && node test/news.js && node test/e2e.js",
     "test:e2e": "node test/e2e.js"
   },
   "engines": {

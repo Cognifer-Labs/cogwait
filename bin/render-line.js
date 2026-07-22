@@ -26,9 +26,14 @@ const ad = client.getCachedAd(sessionId);
 
 if (!ad) {
   // No ad cached yet — kick a detached refresh so the next prompt has one, and
-  // render nothing this time (never block the prompt, never invent a line).
+  // fall back to the unpaid AI-news line (never labeled [sponsor], never
+  // reported as an impression). Nothing cached → render nothing, as before.
   Promise.resolve(client.refreshAd && client.refreshAd(sessionId)).catch(() => {});
-  process.exit(0);
+  const news = require('../lib/news');
+  const item = news.getCachedNews();
+  const line = item ? platforms.renderNewsForHost(host, item) : null;
+  if (line) process.stdout.write(line);
+  process.exit(0); // nothing billed on this path
 }
 
 const line = platforms.renderForHost(host, ad, client.LEVEL);

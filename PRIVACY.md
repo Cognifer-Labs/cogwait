@@ -38,6 +38,15 @@ terminal, throttled to once per session per 15 seconds.
   reconciliation and fraud defense; aggregate after settlement.
 - **Deletion:** request removal of your `publisher_id` and its records at any time.
 
+## AI-news fallback (unpaid, anonymous)
+
+When there is no ad to show, the status line may display a recent AI-news
+headline instead. That fetch goes to a public news API (Hacker News/Algolia)
+as a **fully anonymous GET** — no publisher id, no session tag, no auth header,
+nothing derived from your machine. It is never labeled `[sponsor]` and is never
+reported as an impression. Turn it off with `COGWAIT_NEWS=0` (or `"news": "0"`
+in `~/.cogwait/config.json`).
+
 ## Your controls
 
 - `COGWAIT_DISABLED=1` — pause all ads and reporting
