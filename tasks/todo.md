@@ -481,7 +481,10 @@ so no surface can silently fork a value.
       upload, no new input element). This wires the two locked designs together
       per the open item — confirm this exact shape holds before building, since
       it's the one part of 9.2 not fully pinned by either DESIGN.md.
-- [ ] Level control + history — restyle to match tokens (no behavior change).
+- [x] Level control + history — restyle to match tokens (no behavior change).
+      (Finding at close: the dashboard never had a level control — that's the
+      desktop app's Ad Level tab; the genuine leftover was the history table,
+      restyled 2026-07-22. Merged in Phase 13 WS-B.)
 
 ### 9.3 — Desktop app (`app/`)
 - [x] Recolor `app/src/styles.css` per 9.0's semantic mapping (not a blanket
@@ -710,15 +713,16 @@ test suites green.
 - [x] Dashboard verified cross-origin against the local API.
 
 ### Still open (needs a decision, not just time)
-- [ ] Publisher key recovery / rotation. Losing `~/.cogwait/config.json` still
-      strands the balance; `register.js` says "contact support" and no support
-      channel exists in any UI. Needs a rotation endpoint + a stated support path.
-- [ ] No advertiser-facing UI at all — `POST /campaign` is admin-token-only, so
-      the demand side has no self-serve surface.
-- [ ] Desktop app lacks the PayPal / cash-out-method UI the web dashboard has,
-      and has no in-app `--chain` equivalent (it tells the user to open a terminal).
-- [ ] `hooks/` wait-timing files are written and never read by anything.
-- [ ] No app version shown in the desktop UI and no update check.
+- [x] Publisher key recovery / rotation — done in Phase 13 (rotate-key +
+      recovery-email + enumeration-resistant admin recover; support path
+      support@cogwait.io stated in dashboard + app About).
+- [x] Advertiser self-serve — Phase 13: `web/advertise.html` + public
+      `POST /campaign/submit` → pending review (no payment; honest framing).
+- [x] Desktop PayPal/cash-out-method UI + in-app `--chain` toggle — Phase 13.
+- [x] `hooks/` wait-timing writers removed — Phase 13 (decision: dead data).
+- [x] App version shown in About; update check deliberately NOT built (repo not
+      public — no honest endpoint to check; static "ships via GitHub" line
+      instead).
 
 ---
 
@@ -777,12 +781,26 @@ API contract (fixed upfront so web/app build against it):
   `{name, text, url, cpm_usd?, budget_usd?, contact_email}` → `{ok, id, status:'pending'}`.
 
 Workstreams (parallel worktrees):
-- [ ] A [security-executor] server: rotation/recovery/campaign-submit + stores
-      (ALTER TABLE retrofit per Phase 8 lesson) + tests + parity
-- [ ] B [executor] web: advertise.html, dashboard level/history restyle finish,
-      rotate-key button, support email surfacing
-- [ ] C [executor] app: version display, cash-out-method (PayPal) parity,
-      chain-mode toggle, support email in About
+- [x] A server: rotate-key, recovery-email (+ register-path optional field —
+      register lives at /session/init, not /publisher), enumeration-resistant
+      admin recover (403 posture matching /campaign; case-insensitive email
+      match; keys plaintext+timingSafeEqual matching existing mechanism),
+      public /campaign/submit with per-IP daily cap + pending-never-served
+      guarantee; both-store parity (30 members) + ALTER TABLE retrofits;
+      309 assertions green. Merged. Notes: minor timing side-channel on
+      recover (id-miss returns faster; body identical, rate-limited — matches
+      codebase posture); one boot-timing e2e flake seen 1/5 runs (pre-existing
+      path, passed standalone).
+- [x] B web: advertise.html (pitch + dark terminal live preview + submit form
+      wired to /campaign/submit with 404/429 degradation), dashboard history
+      restyle + Account & security card (recovery email, confirm-first rotate-key
+      with copy-once box), support@cogwait.io in footer, Advertise links —
+      merged 4eef38f, suite green. (Agent self-corrected the stale worktree base.)
+- [x] C app: app_version command (About shows version + honest no-update-check
+      line), set_payout_method → POST /payout/method (key Rust-side, graceful
+      404), chain toggle byte-equivalent to CLI --chain incl. single-write
+      .cogwait-bak guarantee + chained uninstall restore, support@cogwait.io
+      in About. cargo check + tsc/vite clean. Merged.
 - [x] D video: theme.ts verified already compliant (gold #CA9A2B + blue #2B5BCA
       present, ANSI set exempt, system fonts only) — 9.0 checkbox was stale,
       ticked; no code change. (Worktree agent hit a stale base and refused
