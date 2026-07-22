@@ -2,6 +2,8 @@
 
 Format: `[date] | what went wrong | rule to prevent it`
 
+2026-07-22 | Spawned 5 parallel worktree agents; 2 of the 5 worktrees were created on a stale base (b2f4ad2, a months-old pre-rebrand commit) instead of current HEAD — one agent noticed and refused, the other completed its whole task against the stale tree and produced an unusable commit. | Worktree base is not guaranteed. Every worktree-agent brief must include "first run `git log --oneline -1`; if HEAD is not <expected sha>, run `git reset --hard <sha>` before touching anything" — and the orchestrator must verify each returned worktree's base sha before merging its work.
+
 2026-07-20 | Flipped the user's macOS appearance with `osascript` just to screenshot a light/dark theme, and reached for gradients (radial body washes, gradient fills) to make a UI feel "colourful". Both were corrected. | Never change a system-level setting to verify UI — build the theme switch into the product (`data-theme` on `<html>` + persisted toggle) and flip that instead. For this project, colour comes from flat washes and per-role accents, never gradients.
 
 2026-07-20 | Ran `node bin/setup.js --help` against the real `$HOME` to see the CLI's help output. `--help` was not a recognized flag, so it fell through to the default action and rewrote `~/.claude/settings.json` (and clobbered the pre-Cogwait backup). This is the same class as the 2026-07-20 register.js lesson above — I re-broke a rule already written down. | Never invoke a `bin/*` entry point against the real `$HOME`, not even for a read-only-looking flag like `--help` — an unrecognized flag may not be inert. Read the argv dispatch first, or run it with `HOME=$(mktemp -d)`.

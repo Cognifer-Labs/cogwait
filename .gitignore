@@ -6,3 +6,6 @@ node_modules/
 video/out/
 .vercel
 supabase/
+
+# Claude Code local state (worktrees, session files)
+.claude/

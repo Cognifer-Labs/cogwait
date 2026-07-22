@@ -28,7 +28,10 @@ Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your account
       vercel.json `includeFiles`). Secrets local-only: db password
       `~/.cogwait/server/supabase-db-password`, admin token
       `~/.cogwait/server/prod-admin-token` (both 0600).
-      Follow-ups: `COGWAIT_ALLOWED_ORIGINS=*` — tighten before real launch; CA was
+      Follow-ups: ~~`COGWAIT_ALLOWED_ORIGINS=*` — tighten~~ env already edited to
+      `""` (deny-all cross-origin) but Vercel bakes env at deploy time — verified
+      2026-07-22 that live prod still grants any Origin; **needs one redeploy to
+      take effect** (bundled into Phase 13 F). CA was
       pinned from the live TLS handshake (TOFU) — optionally replace with the
       dashboard-downloaded cert (Project Settings → Database → SSL) for strictness.
 
@@ -410,7 +413,7 @@ so no surface can silently fork a value.
         `--gold-deep/-ink/-wash` and `--blue-deep/-ink/-wash` per §3.1; every
         `box-shadow`/hover/focus consumer repointed to whichever new variable
         matches its element's semantic role above.
-- [ ] `video/src/theme.ts` `COLORS` (lines 4-18) + add the `FONT`/mono-vs-sans
+- [x] `video/src/theme.ts` `COLORS` (lines 4-18) + add the `FONT`/mono-vs-sans
       split already present (`FONT_MONO`/`FONT_SANS`, lines 20-23, unchanged
       shape) — swap `sponsor`/`magenta` → gold, add a `blue` entry for action-ish
       video text (e.g. the `npx cogwait` CTA block), keep `cyan`/`yellow`/`green`/
@@ -566,7 +569,7 @@ so no surface can silently fork a value.
 - [x] Grep all touched Fund-OSS copy (landing, dashboard, app, video) for
       "received" / "maintainer X got" language — must be none; every figure is
       captioned pooled/snapshot.
-- [ ] Confirm decision #5 (70/30 vs donate-pct interpretation, ui-redo DESIGN.md
+- [x] Confirm decision #5 (70/30 vs donate-pct interpretation, ui-redo DESIGN.md
       §9 open item) with the user before merging any landing/dashboard copy
       that could read as changing the publisher/operator split. **Left open
       deliberately — this is flagged for explicit user veto in both source
@@ -740,6 +743,56 @@ reported as an impression, never labeled `[sponsor]`.
       fallback via `platforms.renderNewsForHost` — same gating (no invented
       rows on unsupported hosts, extensions excluded), +4 assertions.
 - [x] README — privacy bullet + `COGWAIT_NEWS=0` env row.
+
+---
+
+## Phase 13 — Open-items sweep (2026-07-22)
+
+User decisions (all four answered explicitly):
+- **Decision #5 (70/30 vs donate-pct): APPROVED as audited** — donate % is
+  publisher-side only, no copy change needed. Closes the ui-redo §9 veto item.
+- **Key recovery: rotate + recovery email** — authed `POST /publisher/rotate-key`,
+  optional recovery email at register (+ authed setter), admin-token recovery
+  endpoint, support path stated in UIs.
+- **Advertiser self-serve: minimal page** — `web/advertise.html` submits to a new
+  public rate-limited `POST /campaign/submit` → pending review; no payment,
+  honest "reviewed manually" framing.
+- **hooks/ wait-timing: remove writers** — dead data; delete hook writes +
+  manifest reference.
+
+API contract (fixed upfront so web/app build against it):
+- `POST /publisher/rotate-key` (authed) → `{ok, publisher_key}` — old key dead.
+- `POST /publisher` gains optional `recovery_email`; `POST /publisher/recovery-email`
+  (authed) sets it later.
+- `POST /admin/publisher/recover` (admin token) body `{payout_id, recovery_email}`
+  → rotates + returns new key on exact match.
+- `POST /campaign/submit` (public, per-IP rate-limited + daily cap) body
+  `{name, text, url, cpm_usd?, budget_usd?, contact_email}` → `{ok, id, status:'pending'}`.
+
+Workstreams (parallel worktrees):
+- [ ] A [security-executor] server: rotation/recovery/campaign-submit + stores
+      (ALTER TABLE retrofit per Phase 8 lesson) + tests + parity
+- [ ] B [executor] web: advertise.html, dashboard level/history restyle finish,
+      rotate-key button, support email surfacing
+- [ ] C [executor] app: version display, cash-out-method (PayPal) parity,
+      chain-mode toggle, support email in About
+- [x] D video: theme.ts verified already compliant (gold #CA9A2B + blue #2B5BCA
+      present, ANSI set exempt, system fonts only) — 9.0 checkbox was stale,
+      ticked; no code change. (Worktree agent hit a stale base and refused
+      correctly; verified in main checkout instead.)
+- [x] E hooks removal: hooks/hooks.json + bin/report-wait.js deleted, manifest
+      hooks key dropped, README/PRIVACY/package.json/CI updated, GC allowlist
+      kept for legacy sweep — committed 37c89b6, plugin validate + full suite
+      green. (Agent's worktree was on the stale base — redone inline.)
+- [ ] F [main] CORS tighten attempt (prod env), final verify (npm test, cargo
+      check, vite build), merge + commits, todo checkboxes
+
+Assumption (stated, not silent): support email `support@cogwait.io` — brand
+domain already used for `api.cogwait.io` prod default. Flag to user if wrong.
+
+Out of scope (external, unchanged): live Stripe/KYC, marketplace policy answer,
+legal review, npm/GitHub publish, Apple signing, Windows box verify, Postgres
+concurrent-payout run (needs disposable DB).
 
 ---
 
