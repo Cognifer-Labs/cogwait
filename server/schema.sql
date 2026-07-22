@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS publishers (
   stripe_account    text,
   donate_pct        numeric  NOT NULL DEFAULT 20,       -- Fund-OSS give-back %, on by default
   payout_method     text     NOT NULL DEFAULT 'stripe', -- cashout rail: 'stripe' | 'paypal'
-  paypal_email      text                                -- PayPal payout destination (when method = 'paypal')
+  paypal_email      text,                               -- PayPal payout destination (when method = 'paypal')
+  recovery_email    text                                -- optional account-recovery address
 );
 
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   budget_remaining_usd  numeric NOT NULL,
   -- Moderation state (AD_POLICY.md); only 'approved' is ever served.
   status                text    NOT NULL,   -- 'pending' | 'approved' | 'rejected' | 'frozen'
-  created               bigint  NOT NULL
+  created               bigint  NOT NULL,
+  contact_email         text                -- advertiser contact for public /campaign/submit
 );
 
 CREATE TABLE IF NOT EXISTS impressions (
@@ -61,12 +63,22 @@ CREATE TABLE IF NOT EXISTS dedupe (
   ts   bigint NOT NULL
 );
 
+-- Public campaign submissions, for the per-IP daily submission cap (anti-abuse).
+CREATE TABLE IF NOT EXISTS campaign_submissions (
+  id   bigserial PRIMARY KEY,
+  ip   text   NOT NULL,
+  ts   bigint NOT NULL            -- epoch ms
+);
+CREATE INDEX IF NOT EXISTS idx_sub_ip_ts ON campaign_submissions (ip, ts);
+
 -- CREATE TABLE IF NOT EXISTS above does NOT retrofit columns onto an
 -- already-deployed table — these ALTERs upgrade existing prod databases in
 -- place (store-pg.js applies the equivalent automatically on startup).
 ALTER TABLE publishers ADD COLUMN IF NOT EXISTS donate_pct numeric NOT NULL DEFAULT 20;
 ALTER TABLE publishers ADD COLUMN IF NOT EXISTS payout_method text NOT NULL DEFAULT 'stripe';
 ALTER TABLE publishers ADD COLUMN IF NOT EXISTS paypal_email text;
+ALTER TABLE publishers ADD COLUMN IF NOT EXISTS recovery_email text;
+ALTER TABLE campaigns  ADD COLUMN IF NOT EXISTS contact_email  text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'cashout';
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS fund text;
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'settled';

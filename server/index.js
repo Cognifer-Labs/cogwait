@@ -60,7 +60,10 @@ if (process.env.COGWAIT_TEST_FAIL_DONATE_ONCE === '1' && process.env.NODE_ENV ==
 // browsers forbid alongside `*` anyway) is not needed.
 const ALLOWED_ORIGINS = (process.env.COGWAIT_ALLOWED_ORIGINS || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
-const PUBLIC_CORS_PATHS = new Set(['/health', '/ad/next']);
+// /campaign/submit is a public, unauthenticated endpoint (an advertiser
+// submission form on the marketing site posts to it cross-origin) and carries no
+// secrets, so it answers CORS `*` like the other public routes.
+const PUBLIC_CORS_PATHS = new Set(['/health', '/ad/next', '/campaign/submit']);
 const CORS_METHODS = 'GET, POST, DELETE, OPTIONS';
 const CORS_ALLOW_HEADERS = 'authorization, content-type, x-admin-token';
 const CORS_MAX_AGE = String(Number(process.env.COGWAIT_CORS_MAX_AGE || 600));
@@ -107,8 +110,30 @@ const CAMPAIGN_STATUSES = new Set(['pending', 'approved', 'rejected', 'frozen'])
 // Fraud/rate limits.
 const DEDUPE_MS = 10000;                 // same tag+ad within window = not billable (atomic in store)
 const MAX_IMPRESSIONS_PER_SESSION_DAY = 500;
+const DAY_MS = 86400000;
+// Anti-abuse cap on the PUBLIC /campaign/submit endpoint: a single IP can create
+// at most this many pending campaigns per rolling day. Mirrors the per-session
+// daily impression cap above — same rolling-window count, keyed by IP. The
+// per-second per-IP limiter (rateLimited) still applies on top of this.
+const MAX_SUBMISSIONS_PER_IP_DAY = Number(process.env.COGWAIT_SUBMIT_CAP || 20);
 const RATE_WINDOW_MS = 1000;
 const RATE_MAX = Number(process.env.COGWAIT_RATE_MAX || 20); // requests/sec per key (per-instance)
+
+// Email validation/normalization for the optional recovery address and the
+// public-submission contact address. Deliberately the same simple, permissive
+// shape the payout-rail email check uses (server-side plausibility, not RFC 5322
+// perfection) — reject the obviously-broken, normalize the rest.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+function validEmail(s) {
+  if (typeof s !== 'string') return false;
+  const e = s.trim();
+  return e.length > 0 && e.length <= 254 && EMAIL_RE.test(e);
+}
+// Normalize for storage AND for the recovery match: trim + lowercase so a
+// legitimate owner isn't locked out by a stray capital or trailing space. Both
+// the stored value and the recovery input pass through this, so the compare is
+// against like-for-like.
+function normEmail(s) { return String(s || '').trim().toLowerCase(); }
 
 const perImpression = (level) => levels.perImpression(level, PUBLISHER_SHARE);
 const rate = new Map();                   // key -> {count, reset} (per-instance; see DEPLOY.md)
@@ -255,6 +280,10 @@ async function handler(req, res) {
       const existing = await store.getPublisher(pid);
       if (!existing) {
         const rec = await store.publisher(pid); // creates with a fresh secret
+        // Optional recovery email captured at registration (validated + normalized;
+        // silently ignored if malformed — registration still succeeds). Never
+        // echoed back here: the registration response is unauthenticated.
+        if (validEmail(b.recovery_email)) await store.setRecoveryEmail(pid, normEmail(b.recovery_email));
         return send(res, 200, { ok: true, publisher_id: pid, secret: rec.secret, session: 'sess-' + hash(pid + Date.now()), registered: true });
       }
       const auth = await authPublisher(req);
@@ -302,6 +331,7 @@ async function handler(req, res) {
         donate_pct: auth.donate_pct,
         payout_method: auth.payout_method || 'stripe',
         paypal_email: maskEmail(auth.paypal_email),   // masked — never the raw address
+        recovery_email: auth.recovery_email || null,  // authed route only — never in an unauth response
         stripe_linked: !!auth.stripe_account,
         payouts,
         donations: payouts.filter((r) => r.kind === 'donation')
@@ -339,6 +369,35 @@ async function handler(req, res) {
         paypal_email: maskEmail(updated.paypal_email),
         paypal_email_set: !!updated.paypal_email
       });
+    }
+
+    // POST /publisher/rotate-key — issue a fresh publisher key for the authed
+    // publisher (same gate as /payout). The new key is returned ONCE; the old key
+    // stops authenticating immediately (auth reads the current secret). Same
+    // generation+storage mechanism as registration (store.rotateKey mirrors
+    // store.publisher's crypto.randomBytes(24) hex secret). Use this to roll a
+    // leaked key without losing the account's balance or history.
+    if (p === '/publisher/rotate-key' && req.method === 'POST') {
+      await readBody(req);
+      const pub = await authPublisher(req);
+      if (!pub) return send(res, 401, { error: 'unauthorized' });
+      const rec = await store.rotateKey(pub.id);
+      log(`publisher key rotated pub=${pub.id}`);
+      return send(res, 200, { ok: true, publisher_key: rec.secret });
+    }
+
+    // POST /publisher/recovery-email — set or change the authed publisher's
+    // account-recovery email (body { recovery_email }). Validated + normalized;
+    // stored on the publisher record. Never exposed on any unauthenticated
+    // response — it is the sole secondary factor for admin-assisted recovery.
+    if (p === '/publisher/recovery-email' && req.method === 'POST') {
+      const b = await readBody(req);
+      const pub = await authPublisher(req);
+      if (!pub) return send(res, 401, { error: 'unauthorized' });
+      if (!validEmail(b.recovery_email)) return send(res, 400, { error: 'invalid_email' });
+      const updated = await store.setRecoveryEmail(pub.id, normEmail(b.recovery_email));
+      log(`recovery email set pub=${pub.id}`);
+      return send(res, 200, { ok: true, recovery_email: updated.recovery_email });
     }
 
     // POST /payout — pay out the publisher's balance via Stripe (real or simulated),
@@ -494,6 +553,43 @@ async function handler(req, res) {
       return send(res, 200, { ok: true, campaign: c });
     }
 
+    // POST /campaign/submit — PUBLIC (no auth): let an advertiser self-submit a
+    // campaign for review. It is created 'pending' and is therefore NEVER served
+    // (store.activeCampaigns only returns 'approved') until an admin approves it
+    // via POST /campaign/status. Inputs are validated/clamped exactly like the
+    // admin POST /campaign path (a public caller is fully untrusted).
+    //
+    // Anti-abuse, two layers: the global per-IP per-second limiter (rateLimited,
+    // applied above) throttles bursts, and a per-IP rolling-daily cap
+    // (submissionsInWindow, mirroring the per-session impression cap) bounds the
+    // total a single IP can create per day. cpm_usd/budget_usd are advisory here
+    // (an admin reviews before serving) and are clamped non-negative.
+    if (p === '/campaign/submit' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (!b.text || !validEmail(b.contact_email)) return send(res, 400, { error: 'missing_fields' });
+      const ip = clientKey(req);
+      if (await store.submissionsInWindow(ip, DAY_MS) >= MAX_SUBMISSIONS_PER_IP_DAY) {
+        return send(res, 429, { error: 'daily_cap' });
+      }
+      const budget = Math.max(0, Number(b.budget_usd) || 0);
+      const c = {
+        id: 'camp-' + Math.abs(hash(String(b.text) + Date.now())),
+        advertiser: String(b.name || 'unknown').slice(0, 80),
+        text: String(b.text).slice(0, 80),
+        url: b.url ? String(b.url).slice(0, 300) : null,
+        cpm_usd: Math.max(0, Number(b.cpm_usd) || CPM_USD),
+        budget_usd: budget,
+        budget_remaining_usd: budget,
+        status: 'pending', // review gate — never served until an admin approves
+        created: Date.now(),
+        contact_email: normEmail(b.contact_email).slice(0, 254)
+      };
+      await store.addCampaign(c);
+      await store.recordSubmission(ip); // count only accepted submissions toward the cap
+      log(`campaign submitted (pending) id=${c.id} ip=${ip}`);
+      return send(res, 200, { ok: true, id: c.id, status: 'pending' });
+    }
+
     // POST /campaign/status — moderation (AD_POLICY.md): approve a reviewed
     // campaign, reject it, or freeze one that turns out to violate policy.
     // Admin-gated, same token as campaign creation. Only 'approved' campaigns
@@ -512,6 +608,29 @@ async function handler(req, res) {
       if (!c) return send(res, 404, { error: 'unknown_campaign' });
       log(`campaign ${c.id} status=${c.status}`);
       return send(res, 200, { ok: true, campaign: c });
+    }
+
+    // POST /admin/publisher/recover — admin-assisted key recovery for a
+    // publisher who lost their key. Same admin gate as POST /campaign
+    // (x-admin-token). Body { payout_id, recovery_email }: on an EXACT match of
+    // BOTH the publisher id and their stored recovery email, rotate the key and
+    // return the new one once (same mechanism as /publisher/rotate-key).
+    //
+    // Enumeration resistance (same posture as the earnings IDOR fix): any
+    // failure — unknown payout_id, no recovery email on file, or a mismatched
+    // email — returns the SAME generic 404, so an admin-token holder can't probe
+    // which publisher ids exist or brute-force recovery addresses field by field.
+    // The per-IP limiter (rateLimited, applied above) bounds guessing rate.
+    if (p === '/admin/publisher/recover' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (!safeEqual(req.headers['x-admin-token'] || '', ADMIN_TOKEN)) return send(res, 403, { error: 'forbidden' });
+      const rec = (typeof b.payout_id === 'string' && b.payout_id) ? await store.getPublisher(b.payout_id) : null;
+      const match = rec && rec.recovery_email && validEmail(b.recovery_email) &&
+        safeEqual(normEmail(b.recovery_email), rec.recovery_email);
+      if (!match) return send(res, 404, { error: 'not found' });
+      const rotated = await store.rotateKey(rec.id);
+      log(`admin recover: key rotated pub=${rec.id}`);
+      return send(res, 200, { ok: true, publisher_key: rotated.secret });
     }
 
     // GET /campaign/stats — advertiser/admin view of campaign spend and fill (admin-gated).
