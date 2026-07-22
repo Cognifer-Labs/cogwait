@@ -656,7 +656,11 @@ pub async fn run_oss_scan() -> Result<Value, String> {
 }
 
 // A lightweight "doctor": the same checks bin/doctor.js reports, as structured rows.
-pub fn doctor() -> Value {
+// Async because the last two checks are the ones that actually answer "is this
+// working right now" — a live backend ping and the client's network-backoff
+// state. Without them the card could report "all good" while the backend was
+// unreachable, which is precisely what a doctor exists to catch.
+pub async fn doctor() -> Value {
     let st = state();
     let mut checks: Vec<Value> = vec![];
     let mut push = |ok: bool, warn: bool, msg: String| {
@@ -677,5 +681,40 @@ pub fn doctor() -> Value {
     if level == 0 { push(false, true, "ad level 0 (Off) — nothing renders, nothing earns".into()); }
     else { push(true, false, format!("ad level {level} active")); }
     if st["disabled"].as_bool().unwrap_or(false) { push(false, true, "ads paused (disabled)".into()); }
+
+    // Network backoff: bin/refresh-ad.js records repeated fetch failures in
+    // ~/.cogwait/refresh.fail ({count, ts}); >= 3 within the 60s window means
+    // the client has throttled itself and ads have stopped refreshing.
+    let fail = read_json(&home().join(".cogwait").join("refresh.fail"));
+    let count = fail.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
+    let ts = fail.get("ts").and_then(|v| v.as_i64()).unwrap_or(0);
+    let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64).unwrap_or(0);
+    if count >= 3 && now_ms.saturating_sub(ts) < 60_000 {
+        push(false, true, "in network backoff — recent ad fetches failed".into());
+    } else {
+        push(true, false, "no active backoff".into());
+    }
+
+    // Live backend reachability. Skipped in mock mode, which is local-only by
+    // definition and would always report unreachable.
+    let cfg = read_json(&config_path());
+    let base = api_base(&cfg);
+    if mock {
+        push(false, true, "mock mode — skipping the live backend check".into());
+    } else {
+        let url = format!("{base}/health");
+        // 3s ceiling — the Status tab must never hang on a dead backend.
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        match client.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => push(true, false, format!("backend reachable ({base})")),
+            Ok(resp) => push(false, false, format!("backend returned HTTP {} ({base})", resp.status().as_u16())),
+            Err(e) if e.is_timeout() => push(false, false, format!("backend timed out after 3s ({base})")),
+            Err(e) => push(false, false, format!("backend unreachable ({base}): {e}")),
+        }
+    }
     json!({ "checks": checks })
 }

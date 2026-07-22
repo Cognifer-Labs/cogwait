@@ -79,7 +79,30 @@ let tab = "home";
 const view = () => document.getElementById("view")!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
+// ---- theme: explicit, app-owned, persisted. Light is the product's look; dark
+// is an opt-in the user picks here, not something inherited from the OS. ----
+type Theme = "light" | "dark";
+function applyTheme(t: Theme) {
+  document.documentElement.setAttribute("data-theme", t);
+  const sw = document.getElementById("theme");
+  if (sw) {
+    sw.setAttribute("data-active", t);
+    sw.querySelectorAll<HTMLButtonElement>("button[data-set]").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.set === t)));
+  }
+  try { localStorage.setItem("cogwait-theme", t); } catch (_) { /* private mode: session-only */ }
+}
+function initTheme() {
+  let saved: string | null = null;
+  try { saved = localStorage.getItem("cogwait-theme"); } catch (_) {}
+  applyTheme(saved === "dark" ? "dark" : "light");
+  document.querySelectorAll<HTMLButtonElement>("#theme button[data-set]").forEach((b) =>
+    b.addEventListener("click", () => applyTheme(b.dataset.set === "dark" ? "dark" : "light")));
+}
+
 async function boot() {
+  if (document.hidden) document.documentElement.setAttribute("data-noanim", "");
+  initTheme();
   L = await invoke<LevelsInfo>("get_levels");
   await refresh();
   document.querySelectorAll<HTMLButtonElement>("#tabs button").forEach((b) => {
@@ -247,7 +270,10 @@ async function renderHome() {
       <div class="msg" id="m"></div>
     </div>`;
   document.getElementById("install")?.addEventListener("click", () => act("install_statusline", { cliPath: S.cli_path || null }, "Installed. Restart Claude Code."));
-  document.getElementById("uninstall")?.addEventListener("click", () => act("uninstall_statusline", {}, "Removed the status line."));
+  document.getElementById("uninstall")?.addEventListener("click", () => {
+    if (!confirm("Remove the Cogwait sponsor line from Claude Code?\n\nYour settings.json is restored and nothing renders or earns until you install again.")) return;
+    act("uninstall_statusline", {}, "Removed the status line.");
+  });
   document.getElementById("reveal-cli")?.addEventListener("click", () => msg("m", S.cli_path ? "CLI: " + S.cli_path : "No bin/statusline.js found — set the path in Setup.", "info"));
   refreshLiveAd();
 }
@@ -257,9 +283,9 @@ async function renderEarnings() {
   view().innerHTML = `
     <div class="view-head"><h2>Earnings</h2><p>Viewable-impression revenue for your publisher id. You keep ${Math.round(S.share * 100)}%.</p></div>
     <div class="stat-row">
-      <div class="stat"><div class="k">Balance</div><div class="v green" id="bal">$0.00</div></div>
-      <div class="stat"><div class="k">Impressions</div><div class="v" id="imp">0</div></div>
-      <div class="stat"><div class="k">Min payout</div><div class="v gold" id="min">$—</div></div>
+      <div class="stat"><div class="k">Balance</div><div class="v gold skeleton" id="bal">$0.00</div></div>
+      <div class="stat"><div class="k">Impressions</div><div class="v blue skeleton" id="imp">0</div></div>
+      <div class="stat"><div class="k">Min payout</div><div class="v green skeleton" id="min">$—</div></div>
     </div>
     <div class="card">
       <div class="btn-row">
@@ -275,11 +301,26 @@ async function renderEarnings() {
   document.getElementById("reload")?.addEventListener("click", loadEarnings);
   document.getElementById("pay")?.addEventListener("click", doPayout);
   document.getElementById("onboard")?.addEventListener("click", doOnboard);
-  if (S.has_key || S.mock) loadEarnings();
+  // The shimmer is only honest while a request is actually in flight — with no
+  // key there is nothing to wait for, so clear it immediately.
+  if (S.has_key || S.mock) loadEarnings(); else clearSkeletons();
 }
+// Stat tiles render as shimmer placeholders until real numbers land.
+function clearSkeletons() {
+  document.querySelectorAll<HTMLElement>(".skeleton").forEach((el) => el.classList.remove("skeleton"));
+}
+// Last figures seen, so the cash-out confirmation can state the exact amount
+// and split instead of asking the user to confirm an abstraction.
+let lastEarnings = { balance_usd: 0, min_payout_usd: 0, donate_pct: 0 };
 async function loadEarnings() {
   try {
     const d = await invoke<any>("get_earnings");
+    clearSkeletons();
+    lastEarnings = {
+      balance_usd: Number(d.balance_usd) || 0,
+      min_payout_usd: Number(d.min_payout_usd) || 0,
+      donate_pct: Number(d.donate_pct !== undefined ? d.donate_pct : (ossState && ossState.donate_pct) || 0) || 0,
+    };
     countUp(document.getElementById("bal"), d.balance_usd || 0, 4, "$");
     countUp(document.getElementById("imp"), d.impressions || 0, 0);
     (document.getElementById("min")!).textContent = "$" + (d.min_payout_usd ?? 0);
@@ -288,7 +329,7 @@ async function loadEarnings() {
     if (payBtn) payBtn.disabled = !canPay;
     renderHistory(d.payouts || []);
     msg("m", canPay ? "Eligible for payout." : `$${((d.min_payout_usd || 0) - (d.balance_usd || 0)).toFixed(2)} to go until payout.`, "info");
-  } catch (e) { msg("m", String(e), "err"); }
+  } catch (e) { clearSkeletons(); msg("m", String(e), "err"); }
 }
 function renderHistory(payouts: any[]) {
   const tb = document.getElementById("hist")!;
@@ -296,11 +337,31 @@ function renderHistory(payouts: any[]) {
   tb.innerHTML = payouts.map((p) => `<tr><td>${new Date(p.ts).toLocaleDateString()}</td><td>$${Number(p.amount_usd || 0).toFixed(2)}</td><td class="mono">${esc(String(p.transfer || ""))}${p.simulated ? " (sim)" : ""}</td></tr>`).join("");
 }
 async function doPayout() {
+  // Real money, irreversible from here. Confirm the amount and the give-back
+  // split before sending — the split is applied server-side at payout, so this
+  // is the last moment the user can see what they are agreeing to.
+  const bal = lastEarnings.balance_usd;
+  const pct = lastEarnings.donate_pct;
+  const give = bal * pct / 100;
+  const lines = [`Cash out $${bal.toFixed(2)}?`, ""];
+  if (pct > 0) {
+    lines.push(`You receive: $${(bal - give).toFixed(2)}`);
+    lines.push(`Give-back to open source (${pct}%): $${give.toFixed(2)}`);
+    lines.push("");
+  }
+  lines.push("This is final — the transfer is sent as soon as you confirm.");
+  if (!confirm(lines.join("\n"))) { msg("m", "Cash-out cancelled.", "info"); return; }
+  const payBtn = document.getElementById("pay") as HTMLButtonElement | null;
+  if (payBtn) payBtn.disabled = true;                 // no double-send in flight
   msg("m", "Requesting payout…", "info");
   try { const d = await invoke<any>("request_payout");
     msg("m", d.ok ? `Paid $${d.paid_usd.toFixed(2)}${d.simulated ? " (simulated)" : ""}` : "Payout: " + (d.error === "below_minimum" ? "balance is below the minimum." : d.error || ""), d.ok ? "ok" : "err");
-    loadEarnings();
-  } catch (e) { msg("m", String(e), "err"); }
+    loadEarnings();                                     // re-derives the button state
+  } catch (e) {
+    msg("m", String(e), "err");
+    const b = document.getElementById("pay") as HTMLButtonElement | null;
+    if (b) b.disabled = false;                        // nothing sent — allow a retry
+  }
 }
 async function doOnboard() {
   msg("m", "Opening Stripe onboarding…", "info");
@@ -327,8 +388,8 @@ function renderLevel() {
       <div class="hint">Illustrative ceiling only — the server caps ${L.daily_cap} viewable impressions per session per day, and real earnings depend on advertiser demand.</div>
       <div class="stat-row">
         <div class="stat"><div class="k">Gross CPM</div><div class="v gold" id="s-cpm">$0</div></div>
-        <div class="stat"><div class="k">You keep / imp</div><div class="v green" id="s-keep">$0</div></div>
-        <div class="stat"><div class="k">Max / session / day</div><div class="v" id="s-max">$0</div></div>
+        <div class="stat"><div class="k">You keep / imp</div><div class="v blue" id="s-keep">$0</div></div>
+        <div class="stat"><div class="k">Max / session / day</div><div class="v green" id="s-max">$0</div></div>
       </div>
     </div>
     <div class="msg" id="m"></div>`;

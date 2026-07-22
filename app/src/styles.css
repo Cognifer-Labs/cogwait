@@ -1,36 +1,121 @@
-/* palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values */
+/* palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values
+   Phase 10: light-first. The warm-paper scheme is the base aesthetic; the dark
+   ink scale is now the prefers-color-scheme:dark branch, not the default.
+   Semantics unchanged: GOLD = value / earnings / give-back. BLUE = actions,
+   links, chrome, structure. The terminal preview keeps real ANSI colour and
+   stays dark in both schemes, because a terminal is dark.
+   Theming is explicit, never inherited from the OS: light is the product's
+   look, and dark is opt-in through the in-app toggle, which sets
+   `data-theme="dark"` on <html>. No gradients anywhere — flat washes only. */
 :root {
-  /* warm-neutral ink scale — deliberately not the cold blue-black of a default theme */
-  --bg: #141310;
-  --panel: #1b1915;
-  --panel-2: #222019;
-  --term: #0e0d0a;
-  --border: #302c24;
-  --border-soft: #26231c;
-  --hair: #2a2720;
-  --fg: #ece7db;          /* bone, faintly warm */
-  --dim: #9c9484;
-  --faint: #615b4d;
-  /* PRIMARY — gold: value, earnings, give-back, the one "loud" brand signal */
-  --gold: #CA9A2B;
-  --gold-deep: #8f6c17;   /* hard-shadow underside of the gold */
-  --gold-ink: #1a1204;
-  --gold-wash: #241d0d;
-  /* SECONDARY — blue: actions ("do it" verbs), links, trust, system chrome */
-  --blue: #2B5BCA;
-  --blue-bright: #4a78e6;
-  --blue-deep: #1c3d86;
-  --blue-ink: #eaf0ff;
-  --blue-wash: #131a2c;
-  /* status — muted, never neon */
-  --green: #5fbf7f;
-  --amber: #d9982f;
-  --red: #e2564d;
-  /* terminal ANSI-ish (the preview is a real terminal, so it stays colorful) */
-  --t-cyan: #5fd0da;
-  --t-yellow: #e8c15a;
-  color-scheme: dark;
+  color-scheme: light;
+
+  /* ---- surfaces: warm paper, tinted — never flat grey ---- */
+  --bg: #f6f2e9;
+  --bg-2: #efe9dc;
+  --panel: #fffdf8;
+  --panel-2: #f4efe2;
+  --term: #12100c;          /* terminal: dark in BOTH schemes */
+  --border: rgba(60, 48, 24, .17);
+  --border-soft: rgba(60, 48, 24, .11);
+  --hair: rgba(60, 48, 24, .09);
+  --fg: #1b1610;
+  --dim: #5f5849;
+  --faint: #8d8574;
+
+  /* PRIMARY — gold: value, earnings, give-back */
+  --gold: #815d12;          /* AA-safe as text on paper/white/gold-wash */
+  --gold-vivid: #ca9a2b;    /* decorative fills only (bars, marks, flags) */
+  --gold-deep: #6a4b0d;
+  --gold-ink: #fffaf0;
+  --gold-wash: #fbeecb;
+  --gold-line: #e6cd90;
+
+  /* SECONDARY — blue: actions, links, trust, all app chrome */
+  --blue: #2b5bca;
+  --blue-bright: #1c3d86;   /* AA-safe as text on paper/white */
+  --blue-deep: #1b3d8a;
+  --blue-ink: #f3f7ff;
+  --blue-wash: #e7edfd;
+  --blue-line: #bacdf6;
+
+  /* status */
+  --green: #1c8a52;  --green-wash: #ddf2e5;  --green-line: #a9dcbe;
+  --amber: #96690a;  --amber-wash: #fbecc6;  --amber-line: #e6cb8c;
+  --red:   #c2372f;  --red-wash:   #fbe4e2;  --red-line:   #f0b8b3;
+
+  /* terminal preview — it follows the theme like everything else. The ANSI
+     palette is re-mixed per scheme so the same line stays readable on paper. */
+  --term-bg: #f1ebdd;
+  --term-bar: #e6dfcd;
+  --term-line: #d9d0ba;
+  --term-fg: #2c261b;
+  --term-dim: #6b6455;
+  --term-green: #1c7a49;
+  --term-banner-bg: #8a6108;
+  --term-banner-ink: #fff8e6;
+  --t-cyan: #0f6b74;
+  --t-yellow: #8a6108;
+  --t-gold: #815d12;
+
+  --shadow-1: 0 1px 2px rgba(60, 48, 24, .06), 0 3px 10px rgba(60, 48, 24, .05);
+  --shadow-2: 0 2px 4px rgba(60, 48, 24, .07), 0 12px 26px rgba(43, 91, 202, .12);
+  --grain: .028;
+
+  /* ---- motion system: every surface uses these, nothing hand-rolls a curve ---- */
+  --e-out: cubic-bezier(.22, .72, .28, 1);     /* entrances, most transitions */
+  --e-spring: cubic-bezier(.34, 1.42, .5, 1);  /* knobs, marks, things that land */
+  --e-in-out: cubic-bezier(.65, 0, .35, 1);    /* reversible state changes */
+  --t1: 110ms;   /* press / hover — must feel instant */
+  --t2: 180ms;   /* colour + border changes */
+  --t3: 280ms;   /* element entrance */
+  --t4: 460ms;   /* view entrance, bar fills */
 }
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141310;
+    --bg-2: #100f0c;
+    --panel: #1b1915;
+    --panel-2: #222019;
+    --term: #0e0d0a;
+    --border: #343026;
+    --border-soft: #29251d;
+    --hair: #2a2720;
+    --fg: #ece7db;
+    --dim: #a49c8b;
+    --faint: #6b6455;
+    --gold: #e0ae3c;
+    --gold-vivid: #ca9a2b;
+    --gold-deep: #8f6c17;
+    --gold-ink: #1a1204;
+    --gold-wash: #2b220f;
+    --gold-line: #574a1f;
+    --blue: #3a68d8;
+    --blue-bright: #7ba0f2;
+    --blue-deep: #1c3d86;
+    --blue-ink: #eaf0ff;
+    --blue-wash: #171f34;
+    --blue-line: #2f4272;
+    --green: #5fbf7f;  --green-wash: #16241b;  --green-line: #2f4a3a;
+    --amber: #d9982f;  --amber-wash: #241f14;  --amber-line: #4a3f26;
+    --red:   #e2564d;  --red-wash:   #2a1917;  --red-line:   #4a2f30;
+    --term-bg: #0e0d0a;
+    --term-bar: #211e18;
+    --term-line: #2b2720;
+    --term-fg: #ece7db;
+    --term-dim: #9c9484;
+    --term-green: #5fbf7f;
+    --term-banner-bg: #e8c15a;
+    --term-banner-ink: #16130a;
+    --t-cyan: #5fd0da;
+    --t-yellow: #e8c15a;
+    --t-gold: #e0ae3c;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 3px 12px rgba(0, 0, 0, .25);
+    --shadow-2: 0 2px 5px rgba(0, 0, 0, .35), 0 14px 30px rgba(0, 0, 0, .35);
+    --grain: .035;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -44,16 +129,17 @@ body {
 /* faint paper grain — the one texture. breaks dead-flat plastic without any glow. */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
-  opacity: 0.028; mix-blend-mode: soft-light;
+  opacity: var(--grain); mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 #app { display: flex; height: 100vh; }
+.hidden { display: none !important; }
 
-/* ---- sidebar: a solid instrument rail, no glass, no blur ---- */
+/* ---- sidebar: a solid instrument rail, blue-tinted (chrome = blue) ---- */
 .nav {
   width: 212px; flex-shrink: 0;
-  background: var(--panel);
+  background: var(--blue-wash);
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   padding: 20px 12px;
@@ -63,100 +149,172 @@ body::after {
   font-weight: 750; font-size: 16px; letter-spacing: -0.2px;
   padding: 4px 8px 20px;
 }
-/* solid mark — a notched accent block, not a glowing orb */
+/* solid mark — a notched gold block, not a glowing orb */
 .brand-dot {
   width: 13px; height: 13px; flex-shrink: 0;
-  background: var(--gold);
+  background: var(--gold-vivid);
   border-radius: 3px;
-  box-shadow: inset 0 0 0 3px var(--bg), 0 0 0 1px var(--gold);
+  box-shadow: inset 0 0 0 3px var(--panel), 0 0 0 1px var(--gold-vivid);
+  animation: mark-in .5s var(--e-spring) backwards;
 }
+@keyframes mark-in { from { transform: scale(.2) rotate(-35deg); opacity: 0; } }
 
 #tabs { display: flex; flex-direction: column; gap: 1px; counter-reset: nav; }
 #tabs button {
   counter-increment: nav;
   position: relative; display: flex; align-items: center; gap: 11px;
   text-align: left; background: transparent; border: 0; color: var(--dim);
-  font: inherit; font-weight: 600; padding: 10px 12px 10px 13px; border-radius: 5px;
-  cursor: pointer; transition: background .13s, color .13s;
+  font: inherit; font-weight: 600; padding: 10px 12px 10px 13px; border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--t2) var(--e-out), color var(--t2) var(--e-out),
+              transform var(--t1) var(--e-out);
+  animation: nav-in .38s var(--e-out) backwards;
 }
+#tabs button:nth-child(1) { animation-delay: .02s; }
+#tabs button:nth-child(2) { animation-delay: .05s; }
+#tabs button:nth-child(3) { animation-delay: .08s; }
+#tabs button:nth-child(4) { animation-delay: .11s; }
+#tabs button:nth-child(5) { animation-delay: .14s; }
+#tabs button:nth-child(6) { animation-delay: .17s; }
+@keyframes nav-in { from { opacity: 0; transform: translateX(-8px); } }
 /* monospace index number, ticket-style */
 #tabs button::before {
   content: counter(nav, decimal-leading-zero);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 11px; font-weight: 700; color: var(--faint);
-  letter-spacing: 0; transition: color .13s;
+  letter-spacing: 0; transition: color var(--t2) var(--e-out);
 }
-/* left selection block */
+/* left selection block — blue, it is navigation chrome */
 #tabs button::after {
   content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px;
-  background: var(--gold); border-radius: 0 2px 2px 0;
-  transform: scaleY(0); transform-origin: center; transition: transform .16s ease;
+  background: var(--blue); border-radius: 0 2px 2px 0;
+  transform: scaleY(0); transform-origin: center;
+  transition: transform var(--t3) var(--e-spring);
 }
-#tabs button:hover { background: var(--panel-2); color: var(--fg); }
-#tabs button.active { background: var(--panel-2); color: var(--fg); }
-#tabs button.active::before { color: var(--gold); }
+#tabs button:hover { background: var(--panel-2); color: var(--fg); transform: translateX(2px); }
+#tabs button:hover::before { color: var(--blue-bright); }
+/* the rail is already blue-washed, so the selected tab lifts OFF it in panel
+   white rather than tinting further — otherwise wash-on-wash reads as nothing */
+#tabs button.active {
+  background: var(--panel); color: var(--blue-bright); transform: none;
+  box-shadow: inset 0 0 0 1px var(--blue-line), var(--shadow-1);
+}
+#tabs button.active::before { color: var(--blue); }
 #tabs button.active::after { transform: scaleY(1); }
+#tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-.nav-foot { margin-top: auto; padding: 0 2px; }
-/* status chip — flat, squared, honest */
+.nav-foot { margin-top: auto; padding: 0 2px; display: flex; flex-direction: column; gap: 8px; }
+/* theme switch — two explicit states, not a guess-what-happens cycle button.
+   The app owns its appearance; it never follows the OS silently. */
+.theme-switch {
+  position: relative; display: flex; width: 100%;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 3px;
+}
+/* the moving slab that marks the live state */
+.theme-switch::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+  width: calc(50% - 3px);
+  background: var(--panel); border: 1px solid var(--blue-line); border-radius: 6px;
+  box-shadow: var(--shadow-1);
+  /* transform, not left/right — a minifier folds those into an `inset`
+     shorthand the state rule then can't override */
+  transition: transform var(--t3) var(--e-spring);
+}
+.theme-switch[data-active="dark"]::before { transform: translateX(100%); }
+.theme-switch button {
+  position: relative; z-index: 1; flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--faint);
+  padding: 7px 4px; transition: color var(--t2) var(--e-out);
+}
+.theme-switch button:hover { color: var(--fg); }
+.theme-switch button[aria-pressed="true"] { color: var(--blue-bright); }
+.theme-switch button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* status chip — flat, squared, honest, now colour-washed by state */
 .pill {
   display: flex; align-items: center; gap: 9px;
   font-size: 11.5px; font-weight: 700; color: var(--dim);
-  border: 1px solid var(--border); border-radius: 6px;
-  padding: 9px 11px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 9px 11px; background: var(--panel);
   text-transform: uppercase; letter-spacing: .04em;
+  transition: color var(--t2) var(--e-out), background var(--t2) var(--e-out),
+              border-color var(--t2) var(--e-out);
 }
 .pill .lp { width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex-shrink: 0; }
-.pill.good { color: var(--green); border-color: #2f4a3a; }
-.pill.warn { color: var(--amber); border-color: #4a3f26; }
-.pill.off  { color: var(--red);   border-color: #4a2f30; }
-.pill.good .lp { animation: blink-soft 2s steps(1) infinite; }
-@keyframes blink-soft { 0%, 70% { opacity: 1; } 71%, 100% { opacity: .3; } }
+.pill.good { color: var(--green); border-color: var(--green-line); background: var(--green-wash); }
+.pill.warn { color: var(--amber); border-color: var(--amber-line); background: var(--amber-wash); }
+.pill.off  { color: var(--red);   border-color: var(--red-line);   background: var(--red-wash); }
+.pill.good .lp { animation: pulse-dot 2.4s var(--e-in-out) infinite; }
+@keyframes pulse-dot {
+  0%, 62% { opacity: 1; transform: scale(1); }
+  72% { opacity: .35; transform: scale(.82); }
+  86%, 100% { opacity: 1; transform: scale(1); }
+}
 
 /* ---- content ---- */
 #view { flex: 1; overflow-y: auto; padding: 32px 40px 48px; }
 #view::-webkit-scrollbar { width: 11px; }
-#view::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; border: 4px solid var(--bg); }
-#view::-webkit-scrollbar-thumb:hover { background: var(--border); }
+#view::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 99px; border: 4px solid transparent;
+  background-clip: padding-box; transition: background var(--t2) var(--e-out);
+}
+#view::-webkit-scrollbar-thumb:hover { background: var(--blue-line); background-clip: padding-box; }
 
 .view-head h2 {
   margin: 0; font-size: 23px; font-weight: 750; letter-spacing: -0.4px;
   display: flex; align-items: center; gap: 12px;
 }
-/* section kicker rule — a hardware label bar to the left of the title */
+/* section kicker rule — gold→blue, the two-accent system in one 22px mark */
 .view-head h2::before {
-  content: ""; width: 18px; height: 3px; background: var(--gold); border-radius: 1px;
+  content: ""; width: 22px; height: 3px; border-radius: 2px;
+  background: var(--gold-vivid);
+  box-shadow: inset -11px 0 0 0 var(--blue);   /* two-tone, flat — no gradient */
+  transform-origin: left center;
+  animation: bar-grow .5s var(--e-out) backwards .06s;
 }
+@keyframes bar-grow { from { transform: scaleX(0); } }
 .view-head p { margin: 9px 0 24px; color: var(--dim); font-size: 13.5px; max-width: 620px; }
 
-/* staggered entrance — transform only, so content is visible even if paused */
-#view > * { animation: rise .42s cubic-bezier(.2,.7,.3,1) backwards; }
-#view > *:nth-child(2) { animation-delay: .04s; }
-#view > *:nth-child(3) { animation-delay: .08s; }
-#view > *:nth-child(4) { animation-delay: .12s; }
-#view > *:nth-child(5) { animation-delay: .16s; }
-@keyframes rise { from { transform: translateY(12px); } to { transform: none; } }
+/* staggered entrance — every direct child of the view rises in on tab change */
+#view > * { animation: rise var(--t4) var(--e-out) backwards; }
+#view > *:nth-child(2) { animation-delay: .05s; }
+#view > *:nth-child(3) { animation-delay: .10s; }
+#view > *:nth-child(4) { animation-delay: .15s; }
+#view > *:nth-child(5) { animation-delay: .20s; }
+#view > *:nth-child(n+6) { animation-delay: .24s; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 
-/* ---- panel: flat surface with a labeled header rule (the signature block) ---- */
+/* ---- panel: light surface, labeled header rule (the signature block) ---- */
 .card {
   background: var(--panel);
   border: 1px solid var(--border-soft);
-  border-radius: 7px; padding: 0; margin-bottom: 14px;
-  transition: border-color .18s;
+  border-radius: 10px; padding: 0; margin-bottom: 14px;
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--t2) var(--e-out), box-shadow var(--t3) var(--e-out),
+              transform var(--t3) var(--e-out);
 }
-.card:hover { border-color: var(--border); }
-/* Fund-OSS give-back card — hero treatment mirroring the dashboard's co-hero card */
-.card.oss-hero { border-color: var(--border); background: linear-gradient(180deg, var(--gold-wash), var(--panel) 60%); }
+.card:hover { border-color: var(--blue-line); box-shadow: var(--shadow-2); transform: translateY(-2px); }
+/* Fund-OSS give-back card — gold hero, it is a give-amount surface */
+.card.oss-hero {
+  border-color: var(--gold-line);
+  background: var(--gold-wash);
+}
+.card.oss-hero:hover { border-color: var(--gold-vivid); }
 /* pad the body but let the header rule run edge-to-edge */
 .card > h3 {
   margin: 0; padding: 15px 18px 13px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.1px;
   border-bottom: 1px solid var(--hair);
   display: flex; align-items: center; gap: 9px;
 }
-/* monospace bracket marker before every panel title */
+/* monospace bracket marker before every panel title — blue (panel chrome) */
 .card > h3::before {
-  content: "▍"; color: var(--gold); font-size: 13px; margin-right: -3px;
+  content: "▍"; color: var(--blue); font-size: 13px; margin-right: -3px;
 }
+/* …except on give-back panels, where the money semantics win */
+.card.oss-hero > h3::before { color: var(--gold-vivid); }
 .card > .hint,
 .card > .btn-row,
 .card > .check,
@@ -166,6 +324,8 @@ body::after {
 .card > table,
 .card > p,
 .card > .stat-row,
+.card > input[type=range],
+.card > .split-row,
 .card > .term { margin-left: 18px; margin-right: 18px; }
 .card > *:last-child { margin-bottom: 18px; }
 .card > .hint:first-of-type,
@@ -184,177 +344,303 @@ body::after {
   letter-spacing: .06em; text-transform: uppercase;
   padding: 3px 7px; border-radius: 4px; vertical-align: 2px; margin-left: 2px;
   color: var(--faint); border: 1px solid var(--border);
+  transition: color var(--t2) var(--e-out), background var(--t2) var(--e-out),
+              border-color var(--t2) var(--e-out);
 }
-.live-tag.live { color: var(--green); border-color: #2f4a3a; background: #16241b; }
-.live-tag.ex { color: var(--amber); border-color: #4a3f26; background: #241f14; }
+.live-tag.live { color: var(--green); border-color: var(--green-line); background: var(--green-wash); animation: tag-in .34s var(--e-spring); }
+.live-tag.ex { color: var(--amber); border-color: var(--amber-line); background: var(--amber-wash); animation: tag-in .34s var(--e-spring); }
+@keyframes tag-in { from { opacity: 0; transform: scale(.8); } }
 
-/* stat tiles — flat, top accent hairline, big tabular numerals. no glow blob. */
+/* stat tiles — each one washed in its own accent, top accent bar wipes in */
 .stat-row { display: flex; gap: 12px; margin-bottom: 14px; }
 .stat {
   flex: 1; background: var(--panel); border: 1px solid var(--border-soft);
-  border-radius: 7px; padding: 16px 16px 17px; position: relative; overflow: hidden;
+  border-radius: 10px; padding: 16px 16px 17px; position: relative; overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: transform var(--t3) var(--e-out), box-shadow var(--t3) var(--e-out),
+              border-color var(--t2) var(--e-out);
+  animation: pop var(--t4) var(--e-out) backwards;
 }
+.stat:nth-child(2) { animation-delay: .06s; }
+.stat:nth-child(3) { animation-delay: .12s; }
+@keyframes pop { from { opacity: 0; transform: scale(.965) translateY(8px); } }
+.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
 .stat::before {
-  content: ""; position: absolute; top: 0; left: 0; width: 34px; height: 3px; background: var(--gold);
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--gold-vivid); transform-origin: left center;
+  animation: bar-grow .6s var(--e-out) backwards .12s;
 }
-.stat .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; font-weight: 700; }
+/* rotate the accent across a row so a stat row reads as a spectrum, not a stripe */
+.stat:nth-child(2)::before { background: var(--blue); }
+.stat:nth-child(3)::before { background: var(--green); }
+.stat:nth-child(1) { background: var(--gold-wash); }
+.stat:nth-child(2) { background: var(--blue-wash); }
+.stat:nth-child(3) { background: var(--green-wash); }
+.stat .k { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; font-weight: 700; }
 .stat .v {
   font-size: 30px; font-weight: 700; margin-top: 8px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-variant-numeric: tabular-nums; letter-spacing: -1px;
 }
-.stat .v.gold { color: var(--gold); } /* money values render gold, not the terminal's ANSI cyan */
+.stat .v.gold { color: var(--gold); }   /* money values */
+.stat .v.blue { color: var(--blue-bright); } /* counts / rates */
 .stat .v.green { color: var(--green); }
 
-/* checks — hairline rows with squared status marks */
-.check { display: flex; align-items: center; gap: 11px; padding: 10px 0; font-size: 13.5px; }
+/* checks — hairline rows with squared status marks, staggered in */
+.check {
+  display: flex; align-items: center; gap: 11px; padding: 10px 0; font-size: 13.5px;
+  animation: rise .34s var(--e-out) backwards;
+}
+.check:nth-child(2) { animation-delay: .04s; }
+.check:nth-child(3) { animation-delay: .08s; }
+.check:nth-child(4) { animation-delay: .12s; }
+.check:nth-child(n+5) { animation-delay: .16s; }
 .check + .check { border-top: 1px solid var(--hair); }
-.dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.dot.ok { background: var(--green); }
-.dot.warn { background: var(--amber); }
-.dot.bad { background: var(--red); }
+.dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.dot.ok { background: var(--green); box-shadow: 0 0 0 3px var(--green-wash); }
+.dot.warn { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-wash); }
+.dot.bad { background: var(--red); box-shadow: 0 0 0 3px var(--red-wash); }
 
 /* ---- buttons: tactile keys. solid fill, hard offset shadow, presses down. ---- */
 button.btn, .btn {
-  font: inherit; font-weight: 700; cursor: pointer; border-radius: 6px;
+  font: inherit; font-weight: 700; cursor: pointer; border-radius: 7px;
   padding: 10px 17px; border: 0; color: var(--blue-ink);
   background: var(--blue);
   box-shadow: 0 2px 0 0 var(--blue-deep);
-  transition: transform .06s ease, box-shadow .06s ease, background .12s;
+  transition: transform var(--t1) var(--e-out), box-shadow var(--t1) var(--e-out),
+              background var(--t2) var(--e-out), filter var(--t2) var(--e-out);
 }
-.btn:hover { background: var(--blue-bright); }
+.btn:hover { background: var(--blue-deep); transform: translateY(-1px); box-shadow: 0 3px 0 0 var(--blue-deep), var(--shadow-2); }
 .btn:active { transform: translateY(2px); box-shadow: 0 0 0 0 var(--blue-deep); }
+.btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+/* money button — used where the verb moves a dollar amount */
+.btn.gold { background: var(--gold-vivid); color: var(--gold-ink); box-shadow: 0 2px 0 0 var(--gold-deep); }
+.btn.gold:hover { background: var(--gold); box-shadow: 0 3px 0 0 var(--gold-deep), var(--shadow-2); }
+.btn.gold:active { box-shadow: 0 0 0 0 var(--gold-deep); }
 .btn.ghost {
-  background: transparent; color: var(--fg);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--panel); color: var(--blue-bright);
+  box-shadow: inset 0 0 0 1px var(--blue-line);
 }
-.btn.ghost:hover { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--faint); }
+.btn.ghost:hover { background: var(--blue-wash); box-shadow: inset 0 0 0 1px var(--blue); transform: translateY(-1px); }
 .btn.ghost:active { transform: translateY(1px); }
-.btn:disabled { opacity: .38; cursor: not-allowed; transform: none; box-shadow: none; filter: saturate(.4); }
+.btn:disabled { opacity: .42; cursor: not-allowed; transform: none; box-shadow: none; filter: saturate(.35); }
 .btn-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
 
-/* inputs — recessed field, mono, accent focus ring (no glow bloom) */
+/* inputs — recessed field, mono, blue focus ring (chrome) */
 label.field { display: block; margin-bottom: 13px; }
 label.field .lab { font-size: 11.5px; color: var(--dim); margin-bottom: 6px; display: block; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 input[type=text], input[type=password] {
-  width: 100%; padding: 10px 12px; border-radius: 5px;
+  width: 100%; padding: 10px 12px; border-radius: 7px;
   font: inherit; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px;
-  background: var(--term); border: 1px solid var(--border); color: var(--fg);
-  user-select: text; transition: border-color .13s, box-shadow .13s;
+  background: var(--bg-2); border: 1px solid var(--border); color: var(--fg);
+  user-select: text;
+  transition: border-color var(--t2) var(--e-out), box-shadow var(--t2) var(--e-out),
+              background var(--t2) var(--e-out);
 }
-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-wash); }
+input[type=text]:hover, input[type=password]:hover { border-color: var(--blue-line); }
+input:focus { outline: none; border-color: var(--blue); background: var(--panel); box-shadow: 0 0 0 3px var(--blue-wash); }
 
-/* toggles — flat squared track, hard-cornered knob */
+/* toggles — flat squared track, hard-cornered knob, blue when on */
 .toggle { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; }
 .toggle + .toggle { border-top: 1px solid var(--hair); }
 .toggle .tlab { font-size: 13.5px; font-weight: 650; }
-.toggle .tsub { font-size: 12px; color: var(--faint); margin-top: 2px; }
-.switch { position: relative; width: 44px; height: 25px; flex-shrink: 0; }
+.toggle .tsub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
 .switch input { display: none; }
 .slider {
-  position: absolute; inset: 0; background: var(--bg); border: 1px solid var(--border);
-  border-radius: 5px; cursor: pointer; transition: background .16s, border-color .16s;
+  position: absolute; inset: 0; background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 7px; cursor: pointer;
+  transition: background var(--t2) var(--e-out), border-color var(--t2) var(--e-out);
 }
 .slider::before {
-  content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px;
-  background: var(--faint); border-radius: 3px; transition: transform .18s cubic-bezier(.4,1.3,.5,1), background .16s;
+  content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
+  background: var(--faint); border-radius: 4px;
+  transition: transform var(--t3) var(--e-spring), background var(--t2) var(--e-out),
+              width var(--t1) var(--e-out);
 }
-.switch input:checked + .slider { background: var(--gold-wash); border-color: var(--gold); }
-.switch input:checked + .slider::before { transform: translateX(19px); background: var(--gold); }
+.switch:active .slider::before { width: 23px; }   /* knob stretches under the thumb */
+.switch input:checked + .slider { background: var(--blue-wash); border-color: var(--blue); }
+.switch input:checked + .slider::before { transform: translateX(20px); background: var(--blue); }
+.switch input:focus-visible + .slider { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* ---- terminal preview: the one place colour lives — it is a real terminal ---- */
+/* ---- terminal preview: ANSI colour, themed with the rest of the app ---- */
 .term {
-  background: var(--term);
-  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--term-bg);
+  border: 1px solid var(--term-line); border-radius: 10px; overflow: hidden;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  color: var(--term-fg);
+  box-shadow: var(--shadow-2);
+  transition: background var(--t2) var(--e-out), border-color var(--t2) var(--e-out),
+              color var(--t2) var(--e-out);
 }
 .term-bar {
-  height: 34px; background: var(--panel-2); border-bottom: 1px solid var(--border-soft);
+  height: 34px; background: var(--term-bar); border-bottom: 1px solid var(--term-line);
   display: flex; align-items: center; gap: 7px; padding: 0 13px;
 }
 .term-bar i { width: 11px; height: 11px; border-radius: 999px; display: inline-block; }
-.term-bar .ttl { flex: 1; text-align: center; color: var(--faint); font-size: 11.5px; margin-right: 46px; }
-.term-bar .clock { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.term-bar .ttl { flex: 1; text-align: center; color: var(--term-dim); font-size: 11.5px; margin-right: 46px; }
+.term-bar .clock { color: var(--term-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .term-body { padding: 16px 18px; font-size: 14px; line-height: 1.62; }
-.term-body .prompt { color: var(--green); }
-.term-body .prompt .caret { color: var(--gold); }
+.term-body .prompt { color: var(--term-green); }
+.term-body .prompt .caret { color: var(--t-gold); }
 .spinner { color: var(--t-cyan); display: inline-block; width: 1ch; }
-.spon-line { min-height: 1.62em; transition: opacity .3s; }
-.spon-line.fade { opacity: 0; }
-.cursor { display: inline-block; width: 8px; height: 1.05em; background: var(--gold); vertical-align: text-bottom; margin-left: 2px; animation: blink 1.05s steps(1) infinite; }
-@keyframes blink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
+.spon-line {
+  min-height: 1.62em;
+  transition: opacity var(--t3) var(--e-out), transform var(--t3) var(--e-out);
+}
+.spon-line.fade { opacity: 0; transform: translateY(-4px); }
+.cursor {
+  display: inline-block; width: 8px; height: 1.05em; background: var(--t-gold);
+  vertical-align: text-bottom; margin-left: 2px; animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-.spon-dim { color: var(--dim); }
+.spon-dim { color: var(--term-dim); }
 .spon-cyan { color: var(--t-cyan); }
-.spon-gold { color: var(--gold); font-weight: 700; } /* was .spon-mag, a leftover magenta-era name */
+.spon-gold { color: var(--t-gold); font-weight: 700; }
 .spon-yellow { color: var(--t-yellow); }
-.divider { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--border); }
+.divider { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--term-line); }
 /* intrusive tiers — inverse banner (L4) + bordered takeover (L5) */
-.spon-banner { background: var(--t-yellow); color: #16130a; font-weight: 700; padding: 1px 6px; border-radius: 2px; }
-.spon-box { border: 1px solid var(--gold); border-radius: 4px; padding: 6px 9px; display: inline-block; margin-top: 2px; }
+.spon-banner { background: var(--term-banner-bg); color: var(--term-banner-ink); font-weight: 700; padding: 1px 6px; border-radius: 2px; }
+.spon-box { border: 1px solid var(--t-gold); border-radius: 4px; padding: 6px 9px; display: inline-block; margin-top: 2px; }
 .spon-box-l { line-height: 1.5; }
 .spon-blink { animation: blink 1.05s steps(1) infinite; }
 
-/* ---- level picker: flat selectable slabs, corner tag when chosen ---- */
+/* ---- level picker: selectable slabs, corner tag when chosen ---- */
 .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .lvl {
-  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 7px;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px;
   padding: 14px; cursor: pointer; position: relative; overflow: hidden;
-  transition: border-color .13s, background .13s;
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--t2) var(--e-out), background var(--t2) var(--e-out),
+              transform var(--t3) var(--e-out), box-shadow var(--t3) var(--e-out);
+  animation: pop .42s var(--e-out) backwards;
 }
-.lvl:hover { border-color: var(--faint); background: var(--panel-2); }
-.lvl.sel { border-color: var(--gold); background: var(--gold-wash); }
+.lvl:nth-child(2) { animation-delay: .04s; }
+.lvl:nth-child(3) { animation-delay: .08s; }
+.lvl:nth-child(4) { animation-delay: .12s; }
+.lvl:nth-child(5) { animation-delay: .16s; }
+.lvl:nth-child(6) { animation-delay: .20s; }
+.lvl:hover { border-color: var(--blue-line); background: var(--blue-wash); transform: translateY(-3px); box-shadow: var(--shadow-2); }
+.lvl:active { transform: translateY(-1px); }
+.lvl.sel {
+  border-color: var(--gold-vivid);
+  background: var(--gold-wash);
+}
 /* filled corner flag instead of a floating glow */
 .lvl.sel::after {
   content: "SET"; position: absolute; top: 0; right: 0;
   font: 700 9px/1 ui-monospace, monospace; letter-spacing: .06em;
-  color: var(--gold-ink); background: var(--gold); padding: 4px 6px; border-radius: 0 0 0 6px;
+  color: var(--gold-ink); background: var(--gold-vivid); padding: 4px 6px; border-radius: 0 0 0 7px;
+  animation: flag-in var(--t3) var(--e-spring);
 }
-.lvl .id { font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
+@keyframes flag-in { from { opacity: 0; transform: translate(6px, -6px); } }
+.lvl .id { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
 .lvl .name { font-size: 18px; font-weight: 750; margin-top: 3px; letter-spacing: -0.3px; }
 .lvl .cpm { font-size: 22px; font-weight: 700; color: var(--gold); margin-top: 11px; font-family: ui-monospace, monospace; letter-spacing: -0.5px; }
 .lvl .keep { font-size: 11.5px; color: var(--green); margin-top: 3px; }
 
-/* history table */
+/* history table — rows deal in one at a time */
 table.hist { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.hist th, table.hist td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--hair); }
-table.hist th { color: var(--faint); font-weight: 700; text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
-table.hist tbody tr { transition: background .13s; }
-table.hist tbody tr:hover { background: var(--panel-2); }
+table.hist th { color: var(--dim); font-weight: 700; text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+table.hist tbody tr { transition: background var(--t2) var(--e-out); animation: row-in .34s var(--e-out) backwards; }
+table.hist tbody tr:nth-child(2) { animation-delay: .04s; }
+table.hist tbody tr:nth-child(3) { animation-delay: .08s; }
+table.hist tbody tr:nth-child(4) { animation-delay: .12s; }
+table.hist tbody tr:nth-child(n+5) { animation-delay: .16s; }
+table.hist tbody tr:hover { background: var(--blue-wash); }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
 
-.msg { min-height: 20px; font-size: 13px; transition: color .15s; }
+.msg { min-height: 20px; font-size: 13px; transition: color var(--t2) var(--e-out); }
+/* main.ts rewrites className on every message — the animation replays each time */
+.msg.err, .msg.ok, .msg.info { animation: msg-in var(--t3) var(--e-out); }
+@keyframes msg-in { from { opacity: 0; transform: translateY(-4px); } }
 .msg.err { color: var(--red); }
 .msg.ok { color: var(--green); }
-.msg.info { color: var(--blue-bright); } /* matches the dashboard's blue info role */
-.note { color: var(--faint); font-size: 12px; line-height: 1.6; }
-a { color: var(--blue-bright); text-decoration: none; }
-a:hover { text-decoration: underline; }
-code { font-family: ui-monospace, Menlo, monospace; background: var(--term); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--gold); border: 1px solid var(--border-soft); }
+.msg.info { color: var(--blue-bright); }
+.note { color: var(--dim); font-size: 12px; line-height: 1.6; }
+a { color: var(--blue-bright); text-decoration: none; transition: color var(--t2) var(--e-out); }
+a:hover { text-decoration: underline; color: var(--blue); }
+code {
+  font-family: ui-monospace, Menlo, monospace; background: var(--blue-wash);
+  padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--blue-bright);
+  border: 1px solid var(--blue-line);
+}
 
 /* ---- Fund-OSS: give-back slider, split preview, maintainer receipt ---- */
-input[type=range] { width: 100%; accent-color: var(--gold); margin: 4px 0; }
+input[type=range] {
+  width: 100%; margin: 6px 0; -webkit-appearance: none; appearance: none;
+  height: 22px; background: transparent; cursor: pointer;
+}
+/* inside a panel the 18px side margins come from the .card > child rule, so the
+   track must size to what's left rather than a full 100% (which overflowed) */
+.card > input[type=range] { display: block; width: calc(100% - 36px); }
+input[type=range]::-webkit-slider-runnable-track {
+  height: 8px; border-radius: 99px;
+  background: var(--gold-vivid);
+  border: 1px solid var(--gold-line);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; margin-top: -7px; border-radius: 50%;
+  background: var(--gold-vivid); border: 3px solid var(--panel);
+  box-shadow: 0 1px 4px rgba(60, 48, 24, .3);
+  transition: transform var(--t2) var(--e-spring), box-shadow var(--t2) var(--e-out);
+}
+input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.14); }
+input[type=range]:active::-webkit-slider-thumb { transform: scale(.94); }
+input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--gold-wash); }
 .split-row { display: flex; gap: 12px; margin-top: 4px; }
 .split-row > div {
-  flex: 1; background: var(--panel-2); border: 1px solid var(--border-soft);
-  border-radius: 6px; padding: 12px;
+  flex: 1; background: var(--panel); border: 1px solid var(--border-soft);
+  border-radius: 8px; padding: 12px;
+  transition: border-color var(--t2) var(--e-out), background var(--t2) var(--e-out);
 }
-.split-row .lab { font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
-.split-row .amt { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-.split-row .keep .amt { color: var(--fg); }
+.split-row .keep { background: var(--blue-wash); border-color: var(--blue-line); }
+.split-row .give { background: var(--gold-wash); border-color: var(--gold-line); }
+.split-row .lab { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.split-row .amt {
+  font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  transition: color var(--t2) var(--e-out);
+}
+.split-row .keep .amt { color: var(--blue-bright); }
 .split-row .give .amt { color: var(--gold); }
 table.receipt { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.receipt th, table.receipt td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--hair); }
-table.receipt th { color: var(--faint); font-weight: 700; text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+table.receipt th { color: var(--dim); font-weight: 700; text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+table.receipt tbody tr { transition: background var(--t2) var(--e-out); animation: row-in .34s var(--e-out) backwards; }
+table.receipt tbody tr:nth-child(2) { animation-delay: .05s; }
+table.receipt tbody tr:nth-child(3) { animation-delay: .10s; }
+table.receipt tbody tr:nth-child(n+4) { animation-delay: .15s; }
+table.receipt tbody tr:hover { background: var(--gold-wash); }
 table.receipt td.pct { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
 table.receipt td.amt { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* skeleton placeholder — flat wash that breathes, no shimmer gradient */
+.skeleton {
+  color: transparent !important; border-radius: 6px;
+  background: var(--blue-wash); animation: breathe 1.2s var(--e-in-out) infinite;
+}
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 
 /* browser-preview flag */
 .demo-flag {
   position: fixed; bottom: 12px; right: 14px; z-index: 10000;
-  font: 11px/1 ui-monospace, monospace; color: var(--faint);
-  background: var(--panel); border: 1px solid var(--border); border-radius: 5px; padding: 6px 11px;
+  font: 11px/1 ui-monospace, monospace; color: var(--blue-bright);
+  background: var(--blue-wash); border: 1px solid var(--blue-line); border-radius: 6px; padding: 6px 11px;
+  animation: rise var(--t4) var(--e-out) backwards .4s;
 }
+
+/* Motion is decoration everywhere above: every animated element is fully
+   visible and usable with animation switched off. */
+/* A backgrounded window/tab throttles animation callbacks, so an entrance
+   animation with a `backwards` fill can strand content at opacity 0. When the
+   document starts hidden, skip the choreography — nobody is watching it. */
+:root[data-noanim] *,
+:root[data-noanim] *::before,
+:root[data-noanim] *::after { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

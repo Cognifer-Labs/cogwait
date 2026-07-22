@@ -29,8 +29,8 @@ fn uninstall_statusline() -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn doctor() -> Value {
-    cogwait::doctor()
+async fn doctor() -> Value {
+    cogwait::doctor().await
 }
 
 #[tauri::command]

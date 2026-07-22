@@ -5,122 +5,276 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cogwait — Earnings</title>
 <style>
-  /* palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values */
+  /* palette: see .planning/ui-redo/DESIGN.md §3 — do not fork values.
+     Phase 10: light-first. Warm paper is the base; dark is opt-in through the
+     in-page toggle. No gradients — flat washes only. Tokens mirror
+     app/src/styles.css exactly. */
   :root{
-    color-scheme:light dark;
-    --bg:#141310;--panel:#1b1915;--panel-2:#222019;--term:#0e0d0a;
-    --border:#302c24;--border-soft:#26231c;--hair:#2a2720;
-    --fg:#ece7db;--dim:#9c9484;--faint:#615b4d;
-    --gold:#CA9A2B;--gold-deep:#8f6c17;--gold-ink:#1a1204;--gold-wash:#241d0d;
-    --blue:#2B5BCA;--blue-bright:#4a78e6;--blue-deep:#1c3d86;--blue-ink:#eaf0ff;--blue-wash:#131a2c;
-    --green:#5fbf7f;--amber:#d9982f;--red:#e2564d;
+    color-scheme:light;
+    --bg:#f6f2e9;--bg-2:#efe9dc;--panel:#fffdf8;--panel-2:#f4efe2;--term:#12100c;
+    --border:rgba(60,48,24,.17);--border-soft:rgba(60,48,24,.11);--hair:rgba(60,48,24,.09);
+    --fg:#1b1610;--dim:#5f5849;--faint:#8d8574;
+    --gold:#815d12;--gold-vivid:#ca9a2b;--gold-deep:#6a4b0d;--gold-ink:#fffaf0;--gold-wash:#fbeecb;--gold-line:#e6cd90;
+    --blue:#2b5bca;--blue-bright:#1c3d86;--blue-deep:#1b3d8a;--blue-ink:#f3f7ff;--blue-wash:#e7edfd;--blue-line:#bacdf6;
+    --green:#1c8a52;--green-wash:#ddf2e5;--green-line:#a9dcbe;
+    --amber:#96690a;--amber-wash:#fbecc6;--amber-line:#e6cb8c;
+    --red:#c2372f;--red-wash:#fbe4e2;--red-line:#f0b8b3;
     --t-cyan:#5fd0da;--t-yellow:#e8c15a;
+    --shadow-1:0 1px 2px rgba(60,48,24,.06),0 3px 10px rgba(60,48,24,.05);
+    --shadow-2:0 2px 4px rgba(60,48,24,.07),0 12px 26px rgba(43,91,202,.12);
+    --grain:.028;
+    /* motion system — shared with app/src/styles.css and web/index.html */
+    --e-out:cubic-bezier(.22,.72,.28,1);
+    --e-spring:cubic-bezier(.34,1.42,.5,1);
+    --e-in-out:cubic-bezier(.65,0,.35,1);
+    --t1:110ms;--t2:180ms;--t3:280ms;--t4:460ms;
   }
-  @media (prefers-color-scheme:light){
-    :root{
-      --bg:#faf8f2;--panel:#ffffff;--panel-2:#f3f0e6;--term:#efece2;
-      --border:rgba(70,58,30,.14);--border-soft:rgba(70,58,30,.10);--hair:rgba(70,58,30,.10);
-      --fg:#1a1611;--dim:#6a6252;--faint:#98907e;
-      /* darker than DESIGN.md §3.2's a97d16 — that value is only ~3:1 on the
-         gold-wash hero and fails 4.5:1 for smaller gold text (table.pct,
-         h3 marker); this clears AA with margin on both white panels and
-         gold-wash tint. See ui-redo fixes report. */
-      --gold:#815d12;--gold-deep:#7a5910;--gold-ink:#fff;--gold-wash:#f2e6c8;
-      --blue:#2b5bca;--blue-bright:#1c3d86;--blue-deep:#16307a;--blue-ink:#fff;--blue-wash:#e4eaf9;
-    }
+  /* dark is opt-in via the in-page toggle (data-theme on <html>), never
+     silently inherited from the OS */
+  :root[data-theme="dark"]{
+      color-scheme:dark;
+      --bg:#141310;--bg-2:#100f0c;--panel:#1b1915;--panel-2:#222019;--term:#0e0d0a;
+      --border:#343026;--border-soft:#29251d;--hair:#2a2720;
+      --fg:#ece7db;--dim:#a49c8b;--faint:#6b6455;
+      --gold:#e0ae3c;--gold-vivid:#ca9a2b;--gold-deep:#8f6c17;--gold-ink:#1a1204;--gold-wash:#2b220f;--gold-line:#574a1f;
+      --blue:#3a68d8;--blue-bright:#7ba0f2;--blue-deep:#1c3d86;--blue-ink:#eaf0ff;--blue-wash:#171f34;--blue-line:#2f4272;
+      --green:#5fbf7f;--green-wash:#16241b;--green-line:#2f4a3a;
+      --amber:#d9982f;--amber-wash:#241f14;--amber-line:#4a3f26;
+      --red:#e2564d;--red-wash:#2a1917;--red-line:#4a2f30;
+      --shadow-1:0 1px 2px rgba(0,0,0,.3),0 3px 12px rgba(0,0,0,.25);
+      --shadow-2:0 2px 5px rgba(0,0,0,.35),0 14px 30px rgba(0,0,0,.35);
+      --grain:.035;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:15px/1.5 -apple-system,"SF Pro Text","Inter",system-ui,sans-serif;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;font:15px/1.5 -apple-system,"SF Pro Text","Inter",system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--fg);-webkit-font-smoothing:antialiased;
+  }
   body::after{
     content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
-    opacity:.028;mix-blend-mode:soft-light;
+    opacity:var(--grain);mix-blend-mode:soft-light;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   .wrap{max-width:700px;margin:0 auto;padding:32px 20px}
   .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace}
-  h1{font-size:21px;font-weight:750;margin:0 0 4px;letter-spacing:-.2px}
+  h1{font-size:21px;font-weight:750;margin:0 0 4px;letter-spacing:-.2px;display:flex;align-items:center;gap:11px}
+  /* the two-accent system in one 22px mark, wiping in on load */
+  h1::before{
+    content:"";width:22px;height:3px;border-radius:2px;flex-shrink:0;
+    background:var(--gold-vivid);box-shadow:inset -11px 0 0 0 var(--blue);
+    transform-origin:left center;animation:bar-grow .5s var(--e-out) backwards .06s;
+  }
   .sub{color:var(--dim);margin:0 0 24px;font-size:13.5px}
   h3{
-    margin:28px 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+    margin:28px 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);
     display:flex;align-items:center;gap:9px;
   }
-  h3::before{content:"▍";color:var(--gold);font-size:13px}
+  h3::before{content:"▍";color:var(--blue);font-size:13px} /* panel chrome → blue */
   .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
   .card{
     flex:1;min-width:140px;background:var(--panel);border:1px solid var(--border-soft);
-    border-radius:9px;padding:16px;
+    border-radius:11px;padding:16px;box-shadow:var(--shadow-1);
+    transition:transform var(--t3) var(--e-out),box-shadow var(--t3) var(--e-out),border-color var(--t2) var(--e-out);
+    animation:pop var(--t4) var(--e-out) backwards;
   }
-  /* the cash-out card is co-hero with Fund-OSS — a subtle gold lift, not a loud glow */
+  .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:var(--blue-line)}
+  /* stagger the tiles within each row so a row deals in rather than snapping */
+  .row .card:nth-child(2){animation-delay:.06s}
+  .row .card:nth-child(3){animation-delay:.12s}
+  /* the cash-out card is co-hero with Fund-OSS — a gold lift, not a loud glow */
   .card.hero{
-    flex-basis:100%;border-color:var(--border);
-    background:linear-gradient(180deg,var(--gold-wash),var(--panel) 60%);
+    flex-basis:100%;border-color:var(--gold-line);
+    background:var(--gold-wash);
   }
   /* Fund-OSS is a give-amount surface → gold wash (give=gold, §3.5), matching
      the cash-out hero. Blue stays reserved for the action buttons inside it. */
   .card.oss{
-    flex-basis:100%;border-color:var(--border);
-    background:linear-gradient(180deg,var(--gold-wash),var(--panel) 60%);
+    flex-basis:100%;border-color:var(--gold-line);
+    background:var(--gold-wash);
   }
-  .k{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .card.hero:hover,.card.oss:hover{border-color:var(--gold-vivid)}
+  /* the plain metric tiles rotate their accent so a row reads as a spectrum */
+  .card:not(.hero):not(.oss){position:relative;overflow:hidden}
+  .card:not(.hero):not(.oss)::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--gold-vivid);
+    transform-origin:left center;animation:bar-grow .6s var(--e-out) backwards .12s;
+  }
+  .row .card:nth-child(2):not(.hero):not(.oss)::before{background:var(--blue)}
+  .row .card:nth-child(3):not(.hero):not(.oss)::before{background:var(--green)}
+  .row .card:nth-child(1):not(.hero):not(.oss){background:var(--gold-wash)}
+  .row .card:nth-child(2):not(.hero):not(.oss){background:var(--blue-wash)}
+  .row .card:nth-child(3):not(.hero):not(.oss){background:var(--green-wash)}
+  .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
   .v{font-size:24px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
   .card.hero .v,.card.oss .v{font-size:36px;line-height:1.1;margin-top:6px}
-  .v.pos{color:var(--gold)} /* earnings render gold, §3.5 — was green, AA-safe in both modes */
+  .v.pos{color:var(--gold)} /* earnings render gold, §3.5 — AA-safe in both modes */
   .v.give{color:var(--gold)}
-  .bar{height:8px;border-radius:99px;background:var(--border-soft);overflow:hidden;margin:14px 0 6px}
-  .bar > i{display:block;height:100%;background:var(--blue);width:0;transition:width .5s ease}
-  .bar > i.ready{background:var(--green)}
-  .barnote{color:var(--faint);font-size:12px}
+  .row .card:nth-child(2) .v{color:var(--blue-bright)}
+  .row .card:nth-child(3) .v{color:var(--green)}
+  .bar{height:9px;border-radius:99px;background:var(--panel-2);overflow:hidden;margin:14px 0 6px;border:1px solid var(--border-soft)}
+  .bar > i{
+    display:block;height:100%;width:0;border-radius:99px;
+    background:var(--blue);
+    transition:width var(--t4) var(--e-out),background var(--t3) var(--e-out);
+  }
+  /* clearing the minimum is the one moment worth celebrating — the fill turns
+     green and breathes, so "ready" reads at a glance without a colour lookup */
+  .bar > i.ready{background:var(--green);animation:bar-breathe 2.2s var(--e-in-out) infinite}
+  @keyframes bar-breathe{0%,100%{opacity:1}50%{opacity:.62}}
+  .barnote{color:var(--dim);font-size:12px}
   /* Connect: the primary way in — pick your config (or receipt) file, browser asks permission */
   .connect{
-    display:block;width:100%;text-align:center;padding:14px;border-radius:9px;
+    display:block;width:100%;text-align:center;padding:14px;border-radius:10px;
     background:var(--blue);color:var(--blue-ink);font-weight:700;cursor:pointer;font-size:15px;
-    box-shadow:0 2px 0 0 var(--blue-deep);transition:transform .06s ease,box-shadow .06s ease;
+    box-shadow:0 2px 0 0 var(--blue-deep);
+    transition:transform var(--t1) var(--e-out),box-shadow var(--t1) var(--e-out),background var(--t2) var(--e-out);
+    animation:pop var(--t4) var(--e-out) backwards .04s;
   }
+  .connect:hover{background:var(--blue-deep);transform:translateY(-1px);box-shadow:0 3px 0 0 var(--blue-deep),var(--shadow-2)}
   .connect:active{transform:translateY(2px);box-shadow:none}
+  .connect:focus-within{outline:2px solid var(--blue);outline-offset:3px}
   .connect input{display:none}
   .or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px;margin:14px 0}
   .or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
   details.manual{margin-bottom:8px}
-  details.manual summary{color:var(--faint);font-size:13px;cursor:pointer;list-style:none}
+  details.manual summary{color:var(--dim);font-size:13px;cursor:pointer;list-style:none;transition:color var(--t2) var(--e-out)}
+  details.manual summary:hover{color:var(--blue-bright)}
   details.manual summary::-webkit-details-marker{display:none}
   details.manual[open] summary{margin-bottom:10px}
+  details.manual[open] form{animation:rise var(--t3) var(--e-out)}
   form{display:flex;gap:8px;margin:0 0 4px}
   input[type=text],input[type=password]{
-    flex:1;padding:10px 12px;border-radius:7px;border:1px solid var(--border);
-    background:var(--term);color:var(--fg);font:inherit;
+    flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--bg-2);color:var(--fg);font:inherit;
+    transition:border-color var(--t2) var(--e-out),box-shadow var(--t2) var(--e-out),background var(--t2) var(--e-out);
   }
-  input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-wash)}
-  input[type=range]{width:100%;accent-color:var(--gold)}
+  input[type=text]:hover,input[type=password]:hover{border-color:var(--blue-line)}
+  input:focus{outline:none;border-color:var(--blue);background:var(--panel);box-shadow:0 0 0 3px var(--blue-wash)}
+  /* give-back slider — money control, so the track is gold */
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{
+    height:8px;border-radius:99px;border:1px solid var(--gold-line);
+    background:var(--gold-vivid);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-7px;border-radius:50%;
+    background:var(--gold-vivid);border:3px solid var(--panel);box-shadow:0 1px 4px rgba(60,48,24,.3);
+    transition:transform var(--t2) var(--e-spring),box-shadow var(--t2) var(--e-out);
+  }
+  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.14)}
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(.94)}
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--gold-wash)}
+  input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:var(--gold-line)}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--gold-vivid);border:3px solid var(--panel)}
   button{
-    font:inherit;font-weight:700;cursor:pointer;border-radius:7px;padding:10px 16px;border:0;
+    font:inherit;font-weight:700;cursor:pointer;border-radius:8px;padding:10px 16px;border:0;
     background:var(--blue);color:var(--blue-ink);box-shadow:0 2px 0 0 var(--blue-deep);
-    transition:transform .06s ease,box-shadow .06s ease;
+    transition:transform var(--t1) var(--e-out),box-shadow var(--t1) var(--e-out),
+               background var(--t2) var(--e-out),filter var(--t2) var(--e-out);
   }
+  button:hover{background:var(--blue-deep);transform:translateY(-1px);box-shadow:0 3px 0 0 var(--blue-deep),var(--shadow-2)}
   button:active{transform:translateY(2px);box-shadow:none}
-  button:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-  button.ghost{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 1px var(--border)}
+  button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+  button:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none;filter:saturate(.35)}
+  button.ghost{background:var(--panel);color:var(--blue-bright);box-shadow:inset 0 0 0 1px var(--blue-line)}
+  button.ghost:hover{background:var(--blue-wash);box-shadow:inset 0 0 0 1px var(--blue)}
   /* Cash out is an action verb → blue, not the gold value display above it */
   button.cashout{margin-top:14px;background:var(--blue);color:var(--blue-ink);width:100%;font-size:15px;padding:12px;box-shadow:0 2px 0 0 var(--blue-deep)}
+  /* once it clears the minimum the button stops being inert and breathes */
+  button.cashout:not(:disabled){animation:ready-pulse 2.6s var(--e-in-out) infinite}
+  @keyframes ready-pulse{
+    0%,100%{box-shadow:0 2px 0 0 var(--blue-deep),0 0 0 0 rgba(43,91,202,.34)}
+    55%{box-shadow:0 2px 0 0 var(--blue-deep),0 0 0 9px rgba(43,91,202,0)}
+  }
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:8px;border-bottom:1px solid var(--hair)}
-  th{color:var(--faint);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em}
+  th{color:var(--dim);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em}
+  tbody tr{transition:background var(--t2) var(--e-out);animation:row-in .34s var(--e-out) backwards}
+  tbody tr:nth-child(2){animation-delay:.05s}
+  tbody tr:nth-child(3){animation-delay:.10s}
+  tbody tr:nth-child(4){animation-delay:.15s}
+  tbody tr:nth-child(n+5){animation-delay:.20s}
+  tbody tr:hover{background:var(--blue-wash)}
+  #receipt-table tbody tr:hover{background:var(--gold-wash)}
   td.amt,td.pct{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
   td.pct{color:var(--gold);font-weight:700}
-  .note{color:var(--faint);font-size:12px;margin-top:16px;line-height:1.55}
+  .note{color:var(--dim);font-size:12px;margin-top:16px;line-height:1.55}
   .disclaimer{color:var(--faint);font-size:11.5px;margin-top:10px;line-height:1.55}
+  code{background:var(--blue-wash);border:1px solid var(--blue-line);color:var(--blue-bright);border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,monospace}
   #msg{min-height:20px;color:var(--blue-bright);font-size:13px;margin-top:12px}
+  #msg:not(:empty){animation:msg-in var(--t3) var(--e-out)}
   .hidden{display:none}
+  #dash:not(.hidden){animation:rise var(--t4) var(--e-out)}
   .split{display:flex;gap:16px;margin-top:8px}
-  .split > div{flex:1;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:7px;padding:12px}
-  .split .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700}
+  .split > div{
+    flex:1;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px;padding:12px;
+    transition:border-color var(--t2) var(--e-out);
+  }
+  .split .keep{background:var(--blue-wash);border-color:var(--blue-line)}
+  .split .give{background:var(--gold-wash);border-color:var(--gold-line)}
+  .split .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:700}
   .split .amt{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
-  .split .keep .amt{color:var(--fg)}
+  .split .keep .amt{color:var(--blue-bright)}
   .split .give .amt{color:var(--gold)}
-  a{color:var(--blue-bright)}
-  @media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+  /* Cash-out method: two rails side by side (bank/card · PayPal) */
+  .pm-grid{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .pm{
+    flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border-soft);
+    border-radius:9px;padding:14px;transition:border-color var(--t2) var(--e-out),background var(--t2) var(--e-out);
+  }
+  .pm:hover{border-color:var(--blue-line);background:var(--blue-wash)}
+  .pm-h{font-weight:700;font-size:13.5px}
+  .pm > button{width:100%;margin-top:8px}
+  #method-current[data-linked=yes]{color:var(--green)}
+  #method-current[data-linked=no]{color:var(--amber)}
+  a{color:var(--blue-bright);transition:color var(--t2) var(--e-out)}
+  a:hover{color:var(--blue)}
+  /* flat placeholder that breathes while a figure is still in flight */
+  .skeleton{color:transparent!important;border-radius:6px;background:var(--blue-wash);animation:breathe 1.2s var(--e-in-out) infinite}
+  @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+  /* theme switch — two explicit states, not a guess-what-happens cycle button.
+     The page owns its appearance; it never follows the OS silently. */
+  .theme-switch{
+    position:fixed;top:16px;right:16px;z-index:50;display:flex;padding:3px;
+    background:var(--panel-2);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow-1);
+  }
+  .theme-switch::before{
+    content:"";position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);
+    background:var(--panel);border:1px solid var(--blue-line);border-radius:7px;box-shadow:var(--shadow-1);
+    /* transform, not left/right — those fold into an `inset` shorthand that a
+       state rule can no longer override */
+    transition:transform var(--t3) var(--e-spring);
+  }
+  .theme-switch[data-active="dark"]::before{transform:translateX(100%)}
+  .theme-switch button{
+    position:relative;z-index:1;display:flex;align-items:center;gap:6px;
+    background:transparent;border:0;border-radius:7px;cursor:pointer;box-shadow:none;
+    font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--faint);padding:7px 12px;transition:color var(--t2) var(--e-out);
+  }
+  .theme-switch button:hover{color:var(--fg);background:transparent;transform:none;box-shadow:none}
+  .theme-switch button[aria-pressed="true"]{color:var(--blue-bright)}
+  .theme-switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}}
+  @keyframes pop{from{opacity:0;transform:scale(.965) translateY(8px)}}
+  @keyframes row-in{from{opacity:0;transform:translateY(6px)}}
+  @keyframes msg-in{from{opacity:0;transform:translateY(-4px)}}
+  @keyframes bar-grow{from{transform:scaleX(0)}}
+  /* Motion is decoration only — every element above is fully visible and usable
+     with animation switched off. */
+  /* A backgrounded tab throttles animation callbacks, so entrance animations
+     with a `backwards` fill can leave content stuck at opacity 0. If the page
+     loads hidden, skip the choreography entirely — nobody is watching it. */
+  :root[data-noanim] *,:root[data-noanim] *::before,:root[data-noanim] *::after{animation:none!important}
+  @media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation:none!important;transition:none!important} }
 </style>
 </head>
 <body>
+<div id="theme" class="theme-switch" role="group" aria-label="Colour theme" data-active="light">
+  <button type="button" data-set="light">&#9728; Light</button>
+  <button type="button" data-set="dark">&#9790; Dark</button>
+</div>
 <div class="wrap">
   <h1>Cogwait earnings</h1>
   <p class="sub">Viewable-impression revenue for your publisher id.</p>
@@ -150,6 +304,32 @@
         <div class="bar"><i id="prog"></i></div>
         <div class="barnote" id="progn">—</div>
         <button id="pay" class="cashout" disabled>Cash out</button>
+      </div>
+    </div>
+
+    <!-- ---- Cash-out method: link a bank/card (Stripe) or PayPal (§10.4) ---- -->
+    <div class="row" id="method-row" style="display:none">
+      <div class="card" style="flex-basis:100%">
+        <div class="k">Cash-out method</div>
+        <div class="v" id="method-current" style="font-size:16px">—</div>
+        <p class="note" style="margin-top:4px">Where your cash-outs are sent. Minimum cash-out is <b id="method-min">$10</b>.</p>
+
+        <div class="pm-grid">
+          <div class="pm">
+            <div class="pm-h">Bank account or card</div>
+            <p class="disclaimer" style="margin-top:0">Linked securely through Stripe — it handles verification.</p>
+            <button id="connect-stripe" class="ghost">Connect bank / card</button>
+            <p class="disclaimer" id="stripe-msg"></p>
+          </div>
+          <div class="pm">
+            <div class="pm-h">PayPal</div>
+            <form id="paypal-form">
+              <input id="paypal-email" type="text" inputmode="email" autocomplete="off" placeholder="you@example.com">
+              <button type="submit">Use PayPal</button>
+            </form>
+            <p class="disclaimer" id="paypal-msg"></p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -208,6 +388,28 @@
   <p class="note">API base: <code id="api"></code>. A <code>?api=</code> override is honored only for an allowlisted host (the Cogwait API, this page's own origin, or loopback) so your key can't be redirected to another server. Self-hosting elsewhere? Edit <code>ALLOWED_HOSTS</code> in this file.</p>
 </div>
 <script>
+  // ---- theme: explicit and page-owned. Light is the product's look; dark is an
+  // opt-in the reader picks here, never inherited silently from the OS. ----
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    var sw = document.getElementById('theme');
+    sw.setAttribute('data-active', t);
+    var opts = sw.querySelectorAll('button[data-set]');
+    for (var i = 0; i < opts.length; i++) opts[i].setAttribute('aria-pressed', String(opts[i].dataset.set === t));
+    try { localStorage.setItem('cogwait-theme', t); } catch (_) { /* private mode: session-only */ }
+  }
+  if (document.hidden) document.documentElement.setAttribute('data-noanim', '');
+
+  (function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem('cogwait-theme'); } catch (_) {}
+    applyTheme(saved === 'dark' ? 'dark' : 'light');
+    var opts = document.querySelectorAll('#theme button[data-set]');
+  for (var i = 0; i < opts.length; i++) {
+    opts[i].addEventListener('click', function () { applyTheme(this.dataset.set === 'dark' ? 'dark' : 'light'); });
+  }
+  })();
+
   const params = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
 
@@ -258,6 +460,30 @@
 
   const usd = (n) => '$' + Number(n || 0).toFixed(2);
 
+  // Count a figure up to its target. The final value is guaranteed even if rAF
+  // is throttled (background tab) or motion is reduced — the animation is a
+  // bonus, never the thing that makes the number correct.
+  function countUp(el, target, opts) {
+    if (!el) return;
+    const o = opts || {};
+    const dec = o.decimals === undefined ? 2 : o.decimals;
+    const fmt = o.format || ((n) => (o.prefix || '') + n.toFixed(dec));
+    const final = fmt(target);
+    el.classList.remove('skeleton');
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || document.hidden || !isFinite(target)) { el.textContent = final; return; }
+    const dur = 800, start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      const e = 1 - Math.pow(1 - t, 3);
+      el.textContent = t >= 1 ? final : fmt(target * e);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    setTimeout(() => { el.textContent = final; }, dur + 120);   // safety net
+  }
+  const countInt = (el, n) => countUp(el, n, { format: (v) => Math.round(v).toLocaleString() });
+
   // ---- Fund-OSS: current known balance + donate_pct, kept for the split preview ----
   let lastBalance = 0;
   let donatePctAvailable = false;
@@ -285,16 +511,17 @@
       lastBalance = bal;
 
       // Cash-out figure reads as dollars-and-cents; keep 4dp only for sub-$1 micro-balances.
-      $('bal').textContent = '$' + bal.toFixed(bal >= 1 ? 2 : 4);
-      $('life').textContent = usd(lifetime);
-      $('paid').textContent = usd(paid);
-      $('imp').textContent = imp.toLocaleString();
-      $('ecpm').textContent = imp ? usd((lifetime / imp) * 1000) : '$—';
+      countUp($('bal'), bal, { decimals: bal >= 1 ? 2 : 4, prefix: '$' });
+      countUp($('life'), lifetime, { prefix: '$' });
+      countUp($('paid'), paid, { prefix: '$' });
+      countInt($('imp'), imp);
+      if (imp) countUp($('ecpm'), (lifetime / imp) * 1000, { prefix: '$' });
+      else $('ecpm').textContent = '$—';
 
       // Avg/day since the publisher was created (backend now returns `created`).
       if (d.created) {
         const days = Math.max(1, Math.ceil((Date.now() - d.created) / 86400000));
-        $('avg').textContent = usd(lifetime / days);
+        countUp($('avg'), lifetime / days, { prefix: '$' });
       } else { $('avg').textContent = '$—'; }
 
       // Cash-out affordance: progress toward the minimum, button live only when clearable.
@@ -309,6 +536,23 @@
       pay.disabled = !ready;
       pay.textContent = ready ? `Cash out ${usd(bal)}` : `Cash out (min ${usd(min)})`;
 
+      // ---- Cash-out method card: graceful degradation if this backend predates §10 ----
+      const methodAvailable = d.payout_method !== undefined;
+      $('method-row').style.display = methodAvailable ? '' : 'none';
+      if (methodAvailable) {
+        $('method-min').textContent = usd(min);
+        const method = d.payout_method === 'paypal' ? 'paypal' : 'stripe';
+        const cur = $('method-current');
+        if (method === 'paypal' && d.paypal_email) {
+          cur.textContent = `PayPal — ${d.paypal_email}`; cur.dataset.linked = 'yes';
+        } else if (method === 'stripe' && d.stripe_linked) {
+          cur.textContent = 'Bank account / card — linked'; cur.dataset.linked = 'yes';
+        } else {
+          cur.textContent = 'Not linked yet — choose a method below.'; cur.dataset.linked = 'no';
+        }
+        if (d.paypal_email) $('paypal-email').placeholder = d.paypal_email;
+      }
+
       // ---- Fund-OSS card: graceful degradation if this backend predates Phase 8 ----
       donatePctAvailable = d.donate_pct !== undefined;
       $('oss-unavailable').classList.toggle('hidden', donatePctAvailable);
@@ -319,7 +563,7 @@
         $('donate-pct-label').textContent = donatePct + '%';
         const donations = d.donations || payouts.filter((p) => p.kind === 'donation');
         const funded = donations.reduce((s, p) => s + (Number(p.amount_usd) || 0), 0);
-        $('oss-funded').textContent = usd(funded);
+        countUp($('oss-funded'), funded, { prefix: '$' });
         renderSplitPreview(donatePct);
       }
 
@@ -439,15 +683,69 @@
 
   $('f').addEventListener('submit', (e) => { e.preventDefault(); PID = $('pid').value.trim(); KEY = $('key').value.trim(); if (PID && KEY) load(PID); });
   $('pay').addEventListener('click', async () => {
+    // Cashing out moves real money and cannot be undone from here. Confirm the
+    // exact amount AND the give-back split first — the split is applied
+    // server-side at payout, so this is the last point the user sees it.
+    const pct = donatePctAvailable ? Number($('donate-slider').value) || 0 : 0;
+    const give = lastBalance * pct / 100;
+    const keep = lastBalance - give;
+    const summary = pct > 0
+      ? `Cash out ${usd(lastBalance)}?\n\nYou receive: ${usd(keep)}\nGive-back to open source (${pct}%): ${usd(give)}\n\nThis is final — the transfer is sent as soon as you confirm.`
+      : `Cash out ${usd(lastBalance)}?\n\nThis is final — the transfer is sent as soon as you confirm.`;
+    if (!window.confirm(summary)) { $('msg').textContent = 'Cash-out cancelled.'; return; }
     $('msg').textContent = 'Requesting payout…';
+    $('pay').disabled = true;                 // no double-send while it is in flight
     try {
       const r = await fetch(`${API}/payout`, { method:'POST', headers: Object.assign({'content-type':'application/json'}, authHeaders()), body: '{}' });
       const d = await r.json();
       $('msg').textContent = d.ok
         ? `Paid $${(d.paid_usd || 0).toFixed(2)}${d.donated_usd ? ` · gave $${d.donated_usd.toFixed(2)}` : ''}${d.simulated?' (simulated)':''}`
         : ('Payout failed: ' + (d.error||''));
-      load(PID);
-    } catch (e) { $('msg').textContent = 'Payout request failed'; }
+      load(PID);                              // re-derives the button's enabled state
+    } catch (e) {
+      $('msg').textContent = 'Payout request failed';
+      $('pay').disabled = false;              // nothing was sent — let them retry
+    }
+  });
+
+  // ---- Cash-out method: link a bank/card (Stripe) or PayPal (same authed pattern) ----
+  $('connect-stripe').addEventListener('click', async () => {
+    if (!PID || !KEY) return;
+    const el = $('stripe-msg');
+    el.textContent = 'Starting…';
+    try {
+      const r = await fetch(`${API}/connect/onboard`, {
+        method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: '{}'
+      });
+      const d = await r.json();
+      if (d.ok && d.url) {
+        // Show the hosted onboarding link (Stripe verifies the bank/card). A
+        // simulated backend returns a placeholder — surface it rather than navigate.
+        el.textContent = '';
+        const a = document.createElement('a');
+        a.href = d.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.textContent = d.simulated ? 'Onboarding link (simulated backend)' : 'Finish linking your bank / card →';
+        el.appendChild(a);
+        if (!d.simulated) load(PID);
+      } else { el.textContent = 'Could not start onboarding: ' + (d.error || ''); }
+    } catch (e) { el.textContent = 'Could not reach ' + API; }
+  });
+  $('paypal-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!PID || !KEY) return;
+    const email = $('paypal-email').value.trim();
+    const el = $('paypal-msg');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { el.textContent = 'Enter a valid PayPal email.'; return; }
+    el.textContent = 'Saving…';
+    try {
+      const r = await fetch(`${API}/payout/method`, {
+        method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({ method: 'paypal', paypal_email: email })
+      });
+      const d = await r.json();
+      if (d.ok) { el.textContent = `PayPal set (${d.paypal_email || email}).`; $('paypal-email').value = ''; load(PID); }
+      else { el.textContent = 'Could not save PayPal: ' + (d.error || ''); }
+    } catch (err) { el.textContent = 'Could not reach ' + API; }
   });
 
   // Requires the key too — no auto-load from URL alone (keeps the key out of history).

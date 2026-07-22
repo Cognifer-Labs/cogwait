@@ -19,7 +19,13 @@
           <button data-tab="setup">Setup</button>
           <button data-tab="about">About</button>
         </nav>
-        <div class="nav-foot"><div id="pill" class="pill">…</div></div>
+        <div class="nav-foot">
+          <div id="theme" class="theme-switch" role="group" aria-label="Colour theme" data-active="light">
+            <button type="button" data-set="light" aria-pressed="true">☀ Light</button>
+            <button type="button" data-set="dark" aria-pressed="false">☾ Dark</button>
+          </div>
+          <div id="pill" class="pill">…</div>
+        </div>
       </aside>
       <main id="view"><!-- rendered by main.ts --></main>
     </div>
