@@ -633,6 +633,46 @@ table.receipt td.amt { font-variant-numeric: tabular-nums; font-family: ui-monos
   animation: rise var(--t4) var(--e-out) backwards .4s;
 }
 
+/* ---- chain toggle (Status install card): keep an existing status line ---- */
+.chain-toggle {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 4px 0 14px; padding: 11px 13px;
+  background: var(--bg-2); border: 1px solid var(--border-soft); border-radius: 8px;
+  font-size: 12.5px; line-height: 1.5; color: var(--dim); cursor: pointer;
+  transition: border-color var(--t2) var(--e-out), background var(--t2) var(--e-out);
+}
+.chain-toggle:hover { border-color: var(--blue-line); }
+.chain-toggle input { margin-top: 2px; accent-color: var(--blue); flex-shrink: 0; }
+
+/* ---- cash-out method card (Earnings): two rails, current-state line ---- */
+.method-current {
+  font-size: 15px; font-weight: 650; margin: 8px 0 4px;
+}
+.method-current[data-linked=yes] { color: var(--green); }
+.method-current[data-linked=no]  { color: var(--amber); }
+.method-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px;
+}
+@media (max-width: 640px) { .method-grid { grid-template-columns: 1fr; } }
+.method-rail {
+  padding: 13px; border: 1px solid var(--border-soft); border-radius: 9px;
+  background: var(--panel-2);
+}
+.method-rail .rail-h { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.method-rail .field { margin-bottom: 10px; }
+.method-rail .note { margin: 0 0 4px; }
+
+/* ---- About: version + support meta rows ---- */
+.about-meta { display: flex; flex-direction: column; gap: 9px; }
+.about-meta > div { display: flex; align-items: baseline; gap: 12px; }
+.about-meta .k {
+  font-size: 11.5px; color: var(--dim); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; min-width: 74px;
+}
+.about-meta .v { font-size: 13.5px; color: var(--fg); }
+.about-meta a.v { color: var(--blue-bright); text-decoration: none; }
+.about-meta a.v:hover { text-decoration: underline; }
+
 /* Motion is decoration everywhere above: every animated element is fully
    visible and usable with animation switched off. */
 /* A backgrounded window/tab throttles animation callbacks, so an entrance
