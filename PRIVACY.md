@@ -13,9 +13,7 @@ your machine.** This document states exactly what is and isn't collected.
 - The raw Claude Code session id
 - Keystrokes, terminal output, or screen contents
 
-The hooks (`UserPromptSubmit`, `Stop`) receive event data on stdin, but the
-scripts read only the session id and discard everything else. See
-`bin/report-wait.js` and `lib/client.js` — every outbound call is auditable.
+See `lib/client.js` — every outbound call is auditable.
 
 ## What IS transmitted, and only to report a viewable ad impression
 

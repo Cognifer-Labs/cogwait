@@ -19,4 +19,4 @@ jobs:
       - name: Run test suite (no external deps)
         run: npm test
       - name: Validate plugin manifest
-        run: node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/plugin.json','utf8')); JSON.parse(require('fs').readFileSync('hooks/hooks.json','utf8')); console.log('manifests valid')"
+        run: node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/plugin.json','utf8')); console.log('manifests valid')"

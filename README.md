@@ -27,13 +27,13 @@ COGWAIT_MOCK=1 npx cogwait      # serves rotating local demo ads; nothing is sen
 
 ### Also installable as a plugin
 
-The repo is a valid Claude Code plugin (`.claude-plugin/plugin.json` + `hooks/hooks.json`), so it can be added from a marketplace:
+The repo is a valid Claude Code plugin (`.claude-plugin/plugin.json`), so it can be added from a marketplace:
 
 ```
 /plugin marketplace add cognifer-labs/cogwait
 ```
 
-The plugin ships the wait-timing hooks. The **status line** is still configured by `npx cogwait`, because a plugin's bundled `settings.json` cannot set the main `statusLine` (only `agent` / `subagentStatusLine` are supported by Claude Code).
+The **status line** is still configured by `npx cogwait`, because a plugin's bundled `settings.json` cannot set the main `statusLine` (only `agent` / `subagentStatusLine` are supported by Claude Code).
 
 ### Desktop app (optional GUI)
 
@@ -53,7 +53,6 @@ cd app && npm run tauri build                    # build a .app / .dmg
 | --- | --- |
 | `bin/statusline.js` | The visible ad surface. Reads a locally cached ad, prints `[sponsor] …`, reports a viewable impression **only because it rendered**. |
 | `bin/refresh-ad.js` | Detached fetcher that keeps the ad cache warm so the status line never blocks on the network. |
-| `hooks/hooks.json` | `UserPromptSubmit` / `Stop` hooks record local wait-start/end timestamps to size visible duration. |
 | `lib/client.js` | Talks to the Cogwait API. Enforces the privacy rules below. |
 | `bin/setup.js` | Injects/removes the `statusLine` entry in `~/.claude/settings.json`. |
 

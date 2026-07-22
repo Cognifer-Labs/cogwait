@@ -31,11 +31,10 @@
   "files": [
     "bin/",
     "lib/",
-    "hooks/",
     ".claude-plugin/",
     "README.md"
   ],
-  "//": "The client (bin/, lib/, hooks/) has ZERO runtime deps. `pg` is optional and used only by the backend when DATABASE_URL is set (server/store-pg.js); it is pure-JS and never touched by the statusline client.",
+  "//": "The client (bin/, lib/) has ZERO runtime deps. `pg` is optional and used only by the backend when DATABASE_URL is set (server/store-pg.js); it is pure-JS and never touched by the statusline client.",
   "optionalDependencies": {
     "pg": "^8.22.0"
   }
