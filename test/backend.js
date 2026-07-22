@@ -29,6 +29,8 @@ const env = Object.assign({}, process.env, {
   PORT: String(PORT), COGWAIT_DATA_DIR: DATA_DIR, COGWAIT_QUIET: '1',
   COGWAIT_ADMIN_TOKEN: ADMIN, COGWAIT_MIN_PAYOUT: '0.001', COGWAIT_CPM: '2', COGWAIT_SHARE: '0.7',
   COGWAIT_RATE_MAX: '1000',
+  // Small per-IP daily cap so the public-submission cap is exercised in a few calls.
+  COGWAIT_SUBMIT_CAP: '4',
   COGWAIT_ALLOWED_ORIGINS: `${ORIGIN_OK}, http://localhost:5173`,
   // Test-only hook (server/index.js): fails the donation leg exactly once per
   // idempotency key, so the partial-failure/idempotency test below is
@@ -534,6 +536,114 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const modStats = await call('GET', '/campaign/stats', null, ADM);
       const modRow = modStats.json.campaigns.find((c) => c.id === 'mod-camp');
       assert(modRow && modRow.status === 'rejected', 'campaign stats reflect the moderated status');
+    }
+
+    // --- Key rotation + recovery email + admin-assisted recovery ---
+    {
+      // Register with a recovery email in the body. It must NOT come back on the
+      // (unauthenticated) registration response, but MUST show on authed /earnings.
+      const recReg = await call('POST', '/session/init', { publisher_id: 'rec-pub', recovery_email: 'Owner@Example.com' });
+      assert(recReg.code === 200 && recReg.json.secret, 'rec-pub registered');
+      assert(recReg.json.recovery_email === undefined, 'registration response never echoes recovery_email');
+      let RECAUTH = { authorization: `Publisher rec-pub:${recReg.json.secret}` };
+      const recEarn = await call('GET', '/earnings', null, RECAUTH);
+      assert(recEarn.json.recovery_email === 'owner@example.com',
+        'recovery_email stored (normalized) and shown on authed /earnings');
+
+      // rotate-key: authed old key works, rotate issues a new key once, old key
+      // 401s immediately, new key works.
+      const rotNoAuth = await call('POST', '/publisher/rotate-key', {});
+      assert(rotNoAuth.code === 401, 'rotate-key requires auth');
+      const oldSecret = recReg.json.secret;
+      const rot = await call('POST', '/publisher/rotate-key', {}, RECAUTH);
+      assert(rot.code === 200 && rot.json.publisher_key && rot.json.publisher_key !== oldSecret,
+        'rotate-key returns a fresh publisher_key');
+      const oldNow = await call('GET', '/earnings', null, { authorization: `Publisher rec-pub:${oldSecret}` });
+      assert(oldNow.code === 401, 'the rotated-out old key fails auth immediately');
+      RECAUTH = { authorization: `Publisher rec-pub:${rot.json.publisher_key}` };
+      const newWorks = await call('GET', '/earnings', null, RECAUTH);
+      assert(newWorks.code === 200, 'the new key authenticates');
+
+      // recovery-email set/change on the authed account.
+      const remNoAuth = await call('POST', '/publisher/recovery-email', { recovery_email: 'x@y.com' });
+      assert(remNoAuth.code === 401, 'recovery-email set requires auth');
+      const remBad = await call('POST', '/publisher/recovery-email', { recovery_email: 'not-an-email' }, RECAUTH);
+      assert(remBad.code === 400 && remBad.json.error === 'invalid_email', 'invalid recovery email rejected');
+      const remOk = await call('POST', '/publisher/recovery-email', { recovery_email: 'new@Example.com' }, RECAUTH);
+      assert(remOk.code === 200 && remOk.json.recovery_email === 'new@example.com', 'recovery email changed (normalized)');
+
+      // admin recover: without the admin token → 403 (same gate as POST /campaign).
+      const recNoAdmin = await call('POST', '/admin/publisher/recover',
+        { payout_id: 'rec-pub', recovery_email: 'new@example.com' });
+      assert(recNoAdmin.code === 403, 'admin recover without the admin token is forbidden');
+
+      // Mismatches (wrong id, wrong email) return an IDENTICAL generic 404 — no
+      // hint about which field was wrong (enumeration resistance).
+      const ADM = { 'x-admin-token': ADMIN };
+      const wrongId = await call('POST', '/admin/publisher/recover',
+        { payout_id: 'no-such-pub', recovery_email: 'new@example.com' }, ADM);
+      const wrongEmail = await call('POST', '/admin/publisher/recover',
+        { payout_id: 'rec-pub', recovery_email: 'wrong@example.com' }, ADM);
+      assert(wrongId.code === 404 && wrongId.json.error === 'not found', 'wrong payout_id → generic 404');
+      assert(wrongEmail.code === 404 && wrongEmail.json.error === 'not found', 'wrong recovery_email → generic 404');
+      assert(wrongId.code === wrongEmail.code && JSON.stringify(wrongId.json) === JSON.stringify(wrongEmail.json),
+        'wrong-id and wrong-email responses are byte-identical (no field-level enumeration)');
+
+      // Happy path: exact id + email match rotates the key and returns it once.
+      const prevKey = rot.json.publisher_key;
+      const recover = await call('POST', '/admin/publisher/recover',
+        { payout_id: 'rec-pub', recovery_email: 'New@example.com' }, ADM); // case-insensitive match
+      assert(recover.code === 200 && recover.json.publisher_key && recover.json.publisher_key !== prevKey,
+        'admin recover on exact match rotates the key and returns a new one');
+      const prevDead = await call('GET', '/earnings', null, { authorization: `Publisher rec-pub:${prevKey}` });
+      assert(prevDead.code === 401, 'the pre-recovery key no longer authenticates');
+      const recoveredWorks = await call('GET', '/earnings', null,
+        { authorization: `Publisher rec-pub:${recover.json.publisher_key}` });
+      assert(recoveredWorks.code === 200, 'the recovered key authenticates');
+    }
+
+    // --- Public campaign submission (/campaign/submit) ---
+    {
+      // Validation: missing text or a bad/absent contact_email is rejected.
+      const noText = await call('POST', '/campaign/submit', { contact_email: 'a@b.com' });
+      assert(noText.code === 400 && noText.json.error === 'missing_fields', 'submit without text rejected');
+      const noEmail = await call('POST', '/campaign/submit', { text: 'Hi', name: 'Acme' });
+      assert(noEmail.code === 400 && noEmail.json.error === 'missing_fields', 'submit without contact_email rejected');
+      const badEmail = await call('POST', '/campaign/submit', { text: 'Hi', contact_email: 'nope' });
+      assert(badEmail.code === 400 && badEmail.json.error === 'missing_fields', 'submit with a malformed contact_email rejected');
+
+      // Happy path: creates a pending campaign (no auth). This is submission #1 of
+      // the per-IP daily cap (COGWAIT_SUBMIT_CAP=4).
+      const sub = await call('POST', '/campaign/submit',
+        { name: 'Self-Serve Co', text: 'Try our thing', url: 'https://selfserve.test', budget_usd: 50, contact_email: 'ADV@Self.Test' });
+      assert(sub.code === 200 && sub.json.ok === true && sub.json.status === 'pending' && sub.json.id,
+        'public submission creates a pending campaign');
+      const subId = sub.json.id;
+
+      // A pending submission is NEVER served (all admin campaigns above are now
+      // frozen/rejected, so serving falls back to house ads — never the pending one).
+      const adBefore = await call('GET', '/ad/next?tag=submit1');
+      assert(adBefore.json.id !== subId && adBefore.json.campaign === false,
+        'pending submitted campaign is not served (house ad served instead)');
+
+      // Approving it via the existing moderation endpoint makes it servable —
+      // proving the pending state, not the endpoint, was the only thing gating it.
+      const approve = await call('POST', '/campaign/status', { id: subId, status: 'approved' }, { 'x-admin-token': ADMIN });
+      assert(approve.code === 200 && approve.json.campaign.status === 'approved', 'submitted campaign can be approved');
+      const adAfter = await call('GET', '/ad/next?tag=submit1');
+      assert(adAfter.json.id === subId, 'once approved, the formerly-pending campaign is served');
+
+      // Admin stats see the submitted campaign with its contact_email captured.
+      const subStats = await call('GET', '/campaign/stats', null, { 'x-admin-token': ADMIN });
+      assert(subStats.json.campaigns.some((c) => c.id === subId), 'submitted campaign appears in admin stats');
+
+      // Per-IP daily cap: submissions #2..#4 succeed (cap=4), #5 is capped.
+      for (let i = 2; i <= 4; i++) {
+        const s = await call('POST', '/campaign/submit', { text: `More ${i}`, contact_email: 'adv@self.test' });
+        assert(s.code === 200 && s.json.status === 'pending', `submission #${i} within the daily cap succeeds`);
+      }
+      const capped = await call('POST', '/campaign/submit', { text: 'Over cap', contact_email: 'adv@self.test' });
+      assert(capped.code === 429 && capped.json.error === 'daily_cap', 'submission past the per-IP daily cap is rejected');
     }
 
     // Persistence: db.json exists on disk (write is debounced ~50ms).

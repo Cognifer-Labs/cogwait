@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const DATA_DIR = process.env.COGWAIT_DATA_DIR || path.join(os.homedir(), '.cogwait', 'server');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 
-const EMPTY = { publishers: {}, campaigns: {}, impressions: [], payouts: [] };
+const EMPTY = { publishers: {}, campaigns: {}, impressions: [], payouts: [], submissions: [] };
 let db = null;
 const dedupe = new Map(); // key -> ts (in-memory; single-instance)
 
@@ -53,7 +53,8 @@ async function publisher(pid) {
       id: pid, balance_usd: 0, impressions: 0, created: Date.now(),
       secret: crypto.randomBytes(24).toString('hex'), stripe_account: null,
       donate_pct: 20, // Fund-OSS mode is on by default; the dev dials it down.
-      payout_method: 'stripe', paypal_email: null // which rail the cashout leg uses
+      payout_method: 'stripe', paypal_email: null, // which rail the cashout leg uses
+      recovery_email: null // optional account-recovery address (see server/index.js)
     };
     persist();
   }
@@ -64,6 +65,19 @@ async function getPublisher(pid) { return load().publishers[pid]; }
 async function setStripeAccount(pid, acct) {
   const p = await publisher(pid);
   p.stripe_account = acct || null; persist(); return p;
+}
+// Set/clear the optional account-recovery email. The server validates+normalizes
+// the address before calling this; `null` clears it.
+async function setRecoveryEmail(pid, email) {
+  const p = await publisher(pid);
+  p.recovery_email = email || null; persist(); return p;
+}
+// Issue a fresh publisher key (secret) — same generation mechanism as register
+// (crypto.randomBytes(24) hex, stored as-is). The old key stops authenticating
+// the instant this returns, since auth reads the current secret.
+async function rotateKey(pid) {
+  const p = await publisher(pid);
+  p.secret = crypto.randomBytes(24).toString('hex'); persist(); return p;
 }
 // Clamp 0-100 server-side — the client can't be trusted to move money.
 async function setDonatePct(pid, pct) {
@@ -234,6 +248,17 @@ async function impressionsInWindow(sessionTag, sinceMs) {
   return load().impressions.filter((i) => i.session_tag === sessionTag && i.ts >= cutoff).length;
 }
 
+// Anti-abuse for the public /campaign/submit endpoint: record one accepted
+// submission per IP and count how many an IP has made in a window. Mirrors the
+// per-session daily impression cap (impressionsInWindow) — same shape, keyed by IP.
+async function recordSubmission(ip) {
+  load().submissions.push({ ip, ts: Date.now() }); persist();
+}
+async function submissionsInWindow(ip, sinceMs) {
+  const cutoff = Date.now() - sinceMs;
+  return load().submissions.filter((s) => s.ip === ip && s.ts >= cutoff).length;
+}
+
 // Atomic "seen within window?": true if a duplicate, else records + returns false.
 async function dedupeSeen(key, windowMs) {
   const now = Date.now();
@@ -248,9 +273,9 @@ async function close() { flush(); }
 module.exports = {
   backend: 'json', init, round,
   publisher, getPublisher, setStripeAccount, setPayoutMethod, setBalance, setDonatePct, creditImpression,
-  deletePublisher,
+  setRecoveryEmail, rotateKey, deletePublisher,
   addCampaign, getCampaign, allCampaigns, activeCampaigns, setCampaignStatus, spendCampaign,
   recordPayout, payoutsFor, pendingPayoutsFor, settlePayout, claimPayoutBatch, settlePayoutLeg,
-  impressionsInWindow, dedupeSeen, close,
+  impressionsInWindow, recordSubmission, submissionsInWindow, dedupeSeen, close,
   flush, DB_PATH, DATA_DIR
 };
