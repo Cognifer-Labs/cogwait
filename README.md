@@ -66,6 +66,7 @@ The status line re-runs after every assistant message plus every `refreshInterva
 - **Viewable-only billing.** An impression is reported solely after the sponsor line was rendered, throttled to once per session per 15s.
 - **No manufactured delay.** Cogwait never slows your terminal or the model to serve more ads. All network calls are detached with hard timeouts.
 - **Auditable.** All bridging logic is in `lib/client.js` and the `bin/` scripts — read every outbound call.
+- **AI-news fallback.** When no ad is available, the slot shows a recent AI-news headline instead. It's unpaid and never labeled `[sponsor]`, no impression is reported, and the fetch (Hacker News/Algolia) is fully anonymous — no publisher id, session tag, or auth header. Opt out with `COGWAIT_NEWS=0`.
 
 ## Ad levels — trade prominence for pay
 
@@ -80,6 +81,8 @@ changes how the line *looks*, never whether it's honest. Default is **Minimal**.
 | **1 · Minimal** (default) | one dim single line | $8 | $0.0056 / impression |
 | **2 · Standard** | one bright colored line + icon + CTA | $18 | $0.0126 / impression |
 | **3 · Boosted** | two-line boxed sponsor block | $35 | $0.0245 / impression |
+| **4 · Banner** | full-width inverse-video banner bar | $60 | $0.042 / impression |
+| **5 · Takeover** | bordered multi-line block with a blinking marker | $90 | $0.063 / impression |
 
 ```bash
 npx cogwait --level 2        # or: export COGWAIT_LEVEL=2
@@ -88,18 +91,43 @@ npx cogwait --level 2        # or: export COGWAIT_LEVEL=2
 CPMs are benchmarked to real developer-audience sponsorship rates (dev
 newsletters/podcasts and ethical dev ad networks run ~$10–40 CPM for a
 qualified, in-context, provably-viewed placement). Every rate is env-overridable
-(`COGWAIT_CPM_L1/L2/L3`) so the network operator sets the live economics.
+(`COGWAIT_CPM_L1` … `COGWAIT_CPM_L5`) so the network operator sets the live economics.
 Earnings still depend on real advertiser demand — see **Status** below.
 
-## Controls
+## Commands
 
-| Action | How |
+Every flag `npx cogwait` accepts. Run `npx cogwait --help` for the same list.
+
+| Command | What it does |
 | --- | --- |
-| Change ad level | `npx cogwait --level 2` (or `COGWAIT_LEVEL=2`) |
-| Pause ads | `export COGWAIT_DISABLED=1` |
-| Remove the status line | `npx cogwait --uninstall` |
-| Point at a different backend | `export COGWAIT_API="https://…"` |
-| Local demo mode (no network) | `export COGWAIT_MOCK=1` |
+| `npx cogwait` | Install the status line into `~/.claude/settings.json` (non-destructive). |
+| `npx cogwait --help` / `-h` | Print the flag list and exit. Touches nothing. |
+| `npx cogwait --version` | Print the installed Cogwait version. |
+| `npx cogwait --status` | Read-only summary: ad level + CPM tier, give-back %, payout id, whether a publisher key is present (never the key itself), API base, mock/disabled/chained state, and whether the status line is actually wired in. Works before anything is configured; makes no network call. |
+| `npx cogwait --doctor` | Same checks, plus a live ping of the backend. Exits non-zero on hard problems. |
+| `npx cogwait --register` | Register with the backend and store your publisher key (0600) in `~/.cogwait/config.json`. |
+| `npx cogwait --level <0-5>` | Set the ad tier — see the table above. |
+| `npx cogwait --earnings` | Balance, lifetime, impressions, effective net CPM, distance to the minimum payout, and recent payouts. |
+| `npx cogwait --cashout` | Request a payout. Prints the amount and the you/give-back split and requires a typed `y` before sending; `--yes` skips the prompt for scripts. |
+| `npx cogwait --oss` | Scan this project's dependencies **locally** and print a maintainer give-back receipt. Nothing about your dependencies is ever transmitted. |
+| `npx cogwait --donate <pct>` | Set the Fund-OSS give-back percentage (0-100, server-clamped). |
+| `npx cogwait --connect` | Link a bank account or card for cash-outs via Stripe Connect. |
+| `npx cogwait --paypal <email>` | Use PayPal as the cash-out rail instead. |
+| `npx cogwait --chain` | Keep an existing `statusLine` — yours renders first, the sponsor line below it. |
+| `npx cogwait --uninstall` | Remove the Cogwait `statusLine`. Leaves your other settings alone. |
+
+| Environment | Effect |
+| --- | --- |
+| `COGWAIT_DISABLED=1` | Pause rendering and billing. |
+| `COGWAIT_MOCK=1` | Local demo ads; nothing leaves the machine. |
+| `COGWAIT_NEWS=0` | Turn off the AI-news fallback line (shown only when no ad is available). |
+| `COGWAIT_API` | Point at a different backend. |
+| `COGWAIT_LEVEL` | Override the ad tier for one run. |
+| `COGWAIT_PAYOUT_ID` | Your publisher id. |
+
+Cogwait keeps its state in `~/.cogwait/` (owner-only). Per-session cache and
+timestamp files there are swept automatically once they are two days stale;
+`config.json` and `oss-receipt.json` are never touched.
 
 ## Backend contract (for the Cogwait network)
 

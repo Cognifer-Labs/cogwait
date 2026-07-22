@@ -1,0 +1,13 @@
+# Lessons
+
+Format: `[date] | what went wrong | rule to prevent it`
+
+2026-07-20 | Flipped the user's macOS appearance with `osascript` just to screenshot a light/dark theme, and reached for gradients (radial body washes, gradient fills) to make a UI feel "colourful". Both were corrected. | Never change a system-level setting to verify UI — build the theme switch into the product (`data-theme` on `<html>` + persisted toggle) and flip that instead. For this project, colour comes from flat washes and per-role accents, never gradients.
+
+2026-07-20 | Ran `node bin/setup.js --help` against the real `$HOME` to see the CLI's help output. `--help` was not a recognized flag, so it fell through to the default action and rewrote `~/.claude/settings.json` (and clobbered the pre-Cogwait backup). This is the same class as the 2026-07-20 register.js lesson above — I re-broke a rule already written down. | Never invoke a `bin/*` entry point against the real `$HOME`, not even for a read-only-looking flag like `--help` — an unrecognized flag may not be inert. Read the argv dispatch first, or run it with `HOME=$(mktemp -d)`.
+
+2026-07-20 | Wrote `@media (prefers-reduced-motion: reduce) { * { animation: none !important } }` and a matching `[data-noanim] *` guard, and assumed motion was fully disabled. `*` does not match pseudo-elements, so every `::before`/`::after` animation (accent bars, kicker rules, corner flags) kept running — including the ones whose `backwards` fill can strand content invisible. | Any global animation/transition kill switch must be written `*, *::before, *::after`. Verify it by reading a pseudo-element's computed `transform`/`opacity`, not by looking at the page.
+
+2026-07-20 | A scroll-reveal built on IntersectionObserver left every section at `opacity: 0` when the page loaded in a backgrounded tab (observer callbacks throttled), i.e. all content stranded invisible. | Any JS-driven reveal must have a failsafe: bail out entirely when `document.hidden`, plus a timer that reveals anything on screen. Content visibility can never depend on an animation callback firing.
+
+2026-07-20 | Ran `bin/register.js` in a manual CLI test with a temp `COGWAIT_DATA_DIR` but NOT a temp `HOME`, so it wrote junk `payout_id`/`publisher_key` into the user's real `~/.cogwait/config.json` (that file path is derived from `os.homedir()`, ignoring `COGWAIT_DATA_DIR`). | Any manual test that invokes a `bin/*` script which writes credentials must run with an isolated `HOME=$(mktemp -d)`, not just an isolated data dir. Server state honors `COGWAIT_DATA_DIR`; client config does NOT — it always lives under real `$HOME/.cogwait`.

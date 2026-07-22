@@ -108,7 +108,7 @@ referral program; publish an anonymized aggregate "what devs earned" report.
 | D30 retention (still enabled) | 50% |
 | Paying advertisers | 3–5 |
 | Fill rate (viewable inventory sold) | ≥ 60% |
-| Uninstall reason captured | 100% (one-question prompt on `--uninstall`) |
+| Uninstall reason captured | *(not built — would need a one-question prompt on `--uninstall`; no such prompt exists today)* |
 | HN front page / PH top 5 | at least one |
 
 North-star: **weekly viewable, paid impressions** — it couples trust (still

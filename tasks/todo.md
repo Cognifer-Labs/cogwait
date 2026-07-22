@@ -20,7 +20,17 @@ Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your account
 - [x] Serverless deploy adapter (`api/index.js` + `vercel.json`) + Dockerfile
 - [x] Advertiser stats endpoint (`GET /campaign/stats`)
 - [x] Configurable rate limit + explicit 429 test; offline-resilience test (renders cached ad when backend down)
-- [ ] Deploy to prod (Vercel/Docker) — **needs your hosting account** (adapter ready)
+- [x] Deploy to prod — LIVE at https://cogwait.vercel.app on **Supabase Postgres**
+      (2026-07-22, `/health` → `store:"postgres"`; smoke-tested register → authed
+      /earnings → DELETE /publisher round-trip). Setup: Supabase project `cogwait`
+      (ref euphyguytlglmadumwcx, us-west-1), transaction pooler :6543, TLS verified
+      via pinned `server/supabase-ca.crt` (Supabase Root 2021 CA, bundled through
+      vercel.json `includeFiles`). Secrets local-only: db password
+      `~/.cogwait/server/supabase-db-password`, admin token
+      `~/.cogwait/server/prod-admin-token` (both 0600).
+      Follow-ups: `COGWAIT_ALLOWED_ORIGINS=*` — tighten before real launch; CA was
+      pinned from the live TLS handshake (TOFU) — optionally replace with the
+      dashboard-downloaded cert (Project Settings → Database → SSL) for strictness.
 
 ## Phase 2 — Economics (DONE as reference impl)
 - [x] Advertiser campaign create + review gate (pending→approved)
@@ -146,12 +156,12 @@ This directly kills the double-cashout scenario: on retry, the cashout row is
 already `'settled'` → skipped; only the donation leg is retried.
 
 ### 8.1 — Storage + parity [local — schema/store only, no money movement]
-- [ ] `server/schema.sql`: on `publishers`, add `donate_pct numeric NOT NULL
+- [x] `server/schema.sql`: on `publishers`, add `donate_pct numeric NOT NULL
       DEFAULT 0`. On `payouts`, add `kind text NOT NULL DEFAULT 'cashout'`,
       `fund text`, `status text NOT NULL DEFAULT 'settled'`, `idempotency_key text`.
       Add `CREATE INDEX IF NOT EXISTS idx_payouts_pid_status ON payouts (pid, status);`
       for the pending-lookup query.
-- [ ] `server/store-pg.js`: the `SCHEMA` const uses `CREATE TABLE IF NOT EXISTS`,
+- [x] `server/store-pg.js`: the `SCHEMA` const uses `CREATE TABLE IF NOT EXISTS`,
       which does **not** retrofit columns onto an already-deployed table — add
       explicit `ALTER TABLE publishers ADD COLUMN IF NOT EXISTS donate_pct ...`
       and equivalent `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS kind/fund/status/idempotency_key ...`
@@ -162,40 +172,40 @@ already `'settled'` → skipped; only the donation leg is retried.
       `server/index.js:169`), `pendingPayoutsFor(pid)`, `settlePayout(id, patch)`.
       `recordPayout` gains `status`/`idempotency_key` params and returns the
       inserted row's `id` (`RETURNING id`).
-- [ ] `server/store-json.js`: add `donate_pct: 0` to the publisher default record
+- [x] `server/store-json.js`: add `donate_pct: 0` to the publisher default record
       (`store-json.js:52`). `recordPayout` (`store-json.js:91`) assigns an `id`
       (`crypto.randomBytes(12).toString('hex')`, already required in this file)
       and defaults `status:'settled'`, `kind:'cashout'`, `fund:null` when not
       specified — pass through explicit values otherwise. Add `setDonatePct`,
       `pendingPayoutsFor` (filter `payouts` by `pid`+`status:'pending'`),
       `settlePayout(id, patch)` (find by id, merge, persist).
-- [ ] `lib/stripe.js`: `transfer(pid, amount, opts, cb)` gains support for
+- [x] `lib/stripe.js`: `transfer(pid, amount, opts, cb)` gains support for
       `opts.idempotency_key` → forwarded as an `Idempotency-Key` request header
       on the real Stripe call. No-op on the simulated (no-key) path — the local
       pending/settled marker is what carries idempotency there.
-- [ ] Verify parity: run `node test/store-interface.js` — it auto-diffs
+- [x] Verify parity: run `node test/store-interface.js` — it auto-diffs
       `Object.keys()` between the two stores, so it will fail loudly if
       `setDonatePct`/`pendingPayoutsFor`/`settlePayout` aren't mirrored on both.
       No changes needed to the test file itself.
 
 ### 8.2 — Server split + config endpoint [money — highest review priority]
-- [ ] `server/index.js`: new env `COGWAIT_FUND_ACCOUNT`. If unset, the donation
+- [x] `server/index.js`: new env `COGWAIT_FUND_ACCOUNT`. If unset, the donation
       leg simulates exactly like `lib/stripe.js` does today without a key
       (`stripe.live` stays the single source of truth for "are transfers real").
-- [ ] `server/index.js`: `POST /donate/config` (new, `authPublisher`-gated like
+- [x] `server/index.js`: `POST /donate/config` (new, `authPublisher`-gated like
       `/payout` at `:189`) — body `{donate_pct}`, clamp integer 0–100 via the
       same clamp pattern as `levels.clampLevel` (`:169`), `store.setDonatePct(pid, pct)`,
       return `{ok, donate_pct}`.
-- [ ] `server/index.js`: rewrite `POST /payout` (`:188-206`) per the 8.0
+- [x] `server/index.js`: rewrite `POST /payout` (`:188-206`) per the 8.0
       mechanism — resume-or-fresh pending rows, per-leg transfer with
       idempotency key, settle, zero balance only when fully settled. Threshold
       check (`MIN_PAYOUT_USD`) stays against total balance, unchanged. Response:
       `{ok, paid_usd:keep, donated_usd:donate, transfers:{cashout, donation}, simulated}`.
-- [ ] `server/index.js`: extend `GET /earnings` (`:178-186`) to add `donate_pct`
+- [x] `server/index.js`: extend `GET /earnings` (`:178-186`) to add `donate_pct`
       (from the authed publisher record) and a donations subset of
       `payoutsFor(auth.id)` (filter `kind:'donation'`) so the dashboard can show
       "funded to date" without a new endpoint.
-- [ ] `test/backend.js` (extend, same isolated-tempdir/spawn pattern already in
+- [x] `test/backend.js` (extend, same isolated-tempdir/spawn pattern already in
       the file): `/donate/config` clamps out-of-range values and requires auth;
       `/payout` split math (`keep+donate === balance` after rounding); donation
       leg produces a `kind:'donation'` row with `fund` set; fund transfer
@@ -204,13 +214,13 @@ already `'settled'` → skipped; only the donation leg is retried.
       already-settled cashout leg** (this is the idempotency regression test —
       non-negotiable, this is the flagged risk); `/earnings` returns `donate_pct`
       + `donations`.
-- [ ] `test/adapter.js` / `test/store-interface.js`: confirm `setDonatePct` +
+- [x] `test/adapter.js` / `test/store-interface.js`: confirm `setDonatePct` +
       payout `kind`/`status` parity across JSON and Postgres (store-interface
       already covers this automatically per 8.1's last item; adapter.js needs no
       change unless a JSON-store-specific pending/settle case is added there).
 
 ### 8.3 — Client: dependency scan + CLI [local — no network beyond existing impression/config calls]
-- [ ] New `lib/oss.js` (pure, dependency-free, matching the style of
+- [x] New `lib/oss.js` (pure, dependency-free, matching the style of
       `lib/levels.js`/`lib/client.js` — no npm deps, no network):
       - `scanDeps(cwd)` — read `package-lock.json` (v2/v3 `packages` map; fall
         back to `package.json` deps if no lockfile), then each resolved
@@ -225,13 +235,13 @@ already `'settled'` → skipped; only the donation leg is retried.
       - `buildReceipt(weights, donateAmountUsd)` → `{totalUsd, maintainers:[{url,
         name, pct, usd}], coverage}` (`coverage` = fraction of deps with *any*
         funding target — must be the real, often-low number).
-- [ ] New `test/oss.js` (new suite, wire into `package.json` `scripts.test`
+- [x] New `test/oss.js` (new suite, wire into `package.json` `scripts.test`
       alongside the existing `test/platforms.js`/`test/e2e.js` chain): fixture
       project trees covering all three `funding` shapes, multi-URL weighting/
       ranking, dollar-allocation-sums-to-total, `coverage` correctness, no
       lockfile, zero funding fields anywhere (coverage 0), malformed manifest,
       duplicate/cyclic deps, symlink-escape rejected.
-- [ ] New `bin/oss.js` (self-contained script, same shape as `bin/register.js`/
+- [x] New `bin/oss.js` (self-contained script, same shape as `bin/register.js`/
       `bin/doctor.js` — runs immediately on require): `--oss` scans `cwd`, pulls
       live `donate_pct` + balance from `GET /earnings` for dollar figures (falls
       back to a neutral %-only breakdown if offline/`MOCK`), prints the receipt
@@ -240,25 +250,25 @@ already `'settled'` → skipped; only the donation leg is retried.
       `~/.cogwait/config.json` (via `client.writeSecret`, matching
       `bin/register.js`'s config-write pattern), and calls the new
       `POST /donate/config`.
-- [ ] `bin/setup.js`: wire the two flags into the existing delegation block
+- [x] `bin/setup.js`: wire the two flags into the existing delegation block
       (`:12-15`, currently `--doctor`/`--register`) — add
       `if (process.argv.includes('--oss')) { require('./oss.js'); return; }` and
       the same for `--donate` (or have `bin/oss.js` itself branch on both flags
       internally and setup.js delegate to it for either — pick one, keep it
       consistent with how `--doctor`/`--register` are each their own file).
-- [ ] `lib/client.js`: add `DONATE_PCT` to the config-precedence block
+- [x] `lib/client.js`: add `DONATE_PCT` to the config-precedence block
       (`client.js:24-34`, alongside `LEVEL` at `:39`) for display only; add a
       thin `setDonatePct(pct, cb)` that POSTs to `/donate/config` using the
       existing `request()` helper. Do **not** touch `getCachedAd`/
       `reportImpression` (the statusline hot path) — this is additive only.
-- [ ] Privacy regression (extend existing no-payload assertions in
+- [x] Privacy regression (extend existing no-payload assertions in
       `test/client.js`/`test/backend.js`): assert no dependency name, URL path,
       or file content ever appears in any request body sent to `/impression`,
       `/donate/config`, or `/payout` — the scan output only ever reaches
       `stdout` or the dashboard's local render.
 
 ### 8.4 — Dashboard UI [local rendering + existing authed endpoints, no new money paths]
-- [ ] `web/dashboard.html`: add a "Fund open source" card following the existing
+- [x] `web/dashboard.html`: add a "Fund open source" card following the existing
       `.card`/`.hero` visual pattern already in the file — donate-% slider
       (0–100) that POSTs to `/donate/config` on change (same `authHeaders()`/
       fetch pattern as the existing cash-out button), "funded to date" pulled
@@ -280,18 +290,18 @@ already `'settled'` → skipped; only the donation leg is retried.
       snapshot — not a per-maintainer payment guarantee" caption per DESIGN.md.
 
 ### 8.5 — Desktop app parity (phase 3 / non-blocking, lower priority)
-- [ ] `app/src-tauri/src/cogwait.rs` (the shared command module referenced by
+- [x] `app/src-tauri/src/cogwait.rs` (the shared command module referenced by
       `app/src-tauri/src/lib.rs`): add `save_config`-style handling for
       `donate_pct` (already generic patch-based, may need no change) and a new
       Rust command wrapping the scan — reuses the "held Rust-side" pattern
       already used for the publisher key.
-- [ ] `app/src-tauri/src/lib.rs`: add `#[tauri::command]` wrappers (`set_donate_pct`,
+- [x] `app/src-tauri/src/lib.rs`: add `#[tauri::command]` wrappers (`set_donate_pct`,
       `run_oss_scan` or similar) and register them in the `invoke_handler!`
       list (`:65-77`), mirroring `save_config`/`get_earnings`.
-- [ ] `app/src/main.ts`: new Fund-OSS panel mirroring the web dashboard card,
+- [x] `app/src/main.ts`: new Fund-OSS panel mirroring the web dashboard card,
       reusing the existing level/render mirroring pattern already shared
       between the CLI and the app.
-- [ ] Do not block the rest of Phase 8 on this — ship 8.1–8.4 first, desktop
+- [x] Do not block the rest of Phase 8 on this — ship 8.1–8.4 first, desktop
       parity lands after.
 
 ### Risks
@@ -312,21 +322,27 @@ already `'settled'` → skipped; only the donation leg is retried.
   don't let them silently creep into 8.2's scope.
 
 ### Verification
-- [ ] `npm test` full suite green, including new `test/oss.js` wired into
+- [x] `npm test` full suite green, including new `test/oss.js` wired into
       `package.json` `scripts.test`.
-- [ ] `node test/store-interface.js` passes with the 3 new store methods present
+- [x] `node test/store-interface.js` passes with the 3 new store methods present
       on both backends.
-- [ ] `test/backend.js`'s forced-failure idempotency case passes: cashout
+- [x] `test/backend.js`'s forced-failure idempotency case passes: cashout
       settles, donation leg fails, balance stays non-zero, retry settles only
       the donation leg, no second cashout transfer is issued.
-- [ ] Manual: `COGWAIT_MOCK=1 npx cogwait --oss` prints a receipt with an honest
+- [x] Manual: `COGWAIT_MOCK=1 npx cogwait --oss` prints a receipt with an honest
       (likely low) `coverage` number and the pooled-fund disclaimer, entirely
       offline.
-- [ ] `bin/statusline.js` / `lib/client.js` `getCachedAd`/`reportImpression`
+- [x] `bin/statusline.js` / `lib/client.js` `getCachedAd`/`reportImpression`
       diffed against pre-Phase-8 behavior — zero changes, hot path proven
       untouched.
-- [ ] Privacy assertion: `grep` outbound request bodies in test fixtures for any
+- [x] Privacy assertion: `grep` outbound request bodies in test fixtures for any
       package name/path — none present.
+- [ ] Postgres concurrent-payout regression (`test/backend.js:332`, gated on
+      `COGWAIT_TEST_DATABASE_URL`) — **skipped locally**: no Docker/local
+      Postgres on this machine, and the test wants a *disposable* DB (never
+      point it at prod Supabase). Run once against a throwaway Postgres
+      (Supabase branch DB, or Docker elsewhere) before the live Stripe key
+      is set. JSON-store concurrency + all idempotency paths are green.
 
 ---
 
@@ -594,6 +610,136 @@ so no surface can silently fork a value.
       rather than a click-through screenshot — see report), three rendered video
       frames (Fund-OSS beat, Closing, Comparison 7-row table) — one system,
       confirmed by eye, not just code.
+
+---
+
+## Phase 10 — Colorful light-first pass + motion system
+
+Decision (user, 2026-07-20): **light-first, color-saturated.** Dark stops being
+the base aesthetic and becomes the `prefers-color-scheme: dark` branch. Blue
+(the locked secondary) gets used far more — all chrome, nav, structure, links,
+actions — while gold stays strictly money / earnings / give-back. Plus a full
+motion system with shared easing + duration tokens across all three surfaces.
+
+- [x] 10.1 `app/src/styles.css` — light-first token block + motion tokens,
+      blue nav/chrome, per-role colorful stat tiles, all new animations.
+      This file is the canonical source the two web pages mirror.
+- [x] 10.2 `web/index.html` — same tokens light-first, blue-heavy chrome,
+      hero entrance + scroll reveal + CTA micro-interactions.
+- [x] 10.3 `web/dashboard.html` — same tokens, blue chrome, count-up numbers,
+      animated progress bar, staggered table rows, message transitions.
+- [x] 10.4 `app/src/main.ts` — per-role stat accent classes, message animation
+      re-trigger, staggered row rendering.
+- [x] 10.5 Verify — `cd app && npm run build` clean, `npm test` green, all three
+      surfaces loaded in Safari, theme toggled both ways, zero gradient nodes
+      confirmed via computed styles, landing scroll-reveal failsafe checked.
+
+Revisions after review (user, same day): **no gradients anywhere** — colour is
+flat washes and per-role accents only; and **no OS-driven theme switching** —
+each surface owns a persisted in-app toggle (`data-theme` on `<html>`,
+`localStorage`), defaulting to light. `prefers-color-scheme` is not consulted.
+
+Rules held: gold = value, blue = action/chrome (semantics never arbitrary);
+terminal block stays dark in both schemes; reduced-motion kills every animation
+and content must still be fully visible; AA contrast in both schemes (light-mode
+gold text stays `#815d12`).
+
+---
+
+## Phase 11 — Basic-feature audit + local bring-up (2026-07-20)
+
+Two audits (UI surfaces; CLI/backend) then three parallel workstreams. All ten
+test suites green.
+
+**Safety / correctness**
+- [x] Cash-out confirmed before sending on both dashboard and desktop app —
+      shows amount + give-back split, disables the button in flight. It
+      previously fired an irreversible transfer on a single click.
+- [x] Uninstall confirmed in the desktop app.
+- [x] `bin/setup.js`: real `--help` / `--version`, and unknown flags now exit 2.
+      Any unrecognized argument (including `--help`) previously fell through to
+      the install branch and rewrote `~/.claude/settings.json`.
+- [x] The `.cogwait-bak` settings backup is written once and never clobbered —
+      a second install used to destroy the pre-Cogwait snapshot.
+- [x] Reduced-motion and no-animation kill switches extended to
+      `*::before, *::after` (a bare `*` never matched pseudo-elements, so accent
+      bars kept animating and could strand content invisible).
+
+**Backend** (`server/index.js`, both stores, +38 assertions)
+- [x] CORS: preflight handling, `COGWAIT_ALLOWED_ORIGINS` allowlist, wildcard
+      only on `/health` and `/ad/next`, `Vary: Origin`, credentials never sent.
+      The dashboard could not have worked cross-origin at all before this.
+- [x] `DELETE /publisher` — honors PRIVACY.md's deletion promise; refuses while
+      a payout is pending or a balance is outstanding.
+- [x] `POST /campaign/status` — the approve/reject/freeze workflow AD_POLICY.md
+      described but that had no endpoint; frozen campaigns stop being served.
+
+**CLI** (`bin/status.js`, `bin/earnings.js`, `bin/cashout.js`, +`test/cli.js`)
+- [x] `--status` (read-only state incl. where each value came from),
+      `--earnings` (balance, lifetime, net vs gross CPM, rail, payout history),
+      `--cashout` (typed confirmation, `--yes` for scripts, idempotent retry).
+- [x] State-dir GC — `~/.cogwait` accumulated per-session `ad-*.json` /
+      `imp-*.stamp` / `wait-*` files forever. Now swept hourly, 48h retention,
+      off the statusline hot path, allowlist-matched so credentials can't be hit.
+- [x] First-ever tests for the CLI entry point (32 assertions), all with an
+      isolated `HOME` **and** `COGWAIT_DATA_DIR`.
+
+**Desktop app / web**
+- [x] App Health card pings `/health` (3s cap) and reports network backoff — it
+      could previously say "all good" while the backend was unreachable.
+- [x] Terminal preview follows the theme; ANSI palette re-mixed for light.
+- [x] Landing footer Privacy/Terms/Ad-policy links fixed (they 404 in
+      production — the files live at the repo root, not under `web/`), and the
+      desktop app is now discoverable from the site.
+
+**Local bring-up (this machine)**
+- [x] `server/run-local.sh` — persistent data dir, admin token minted once
+      (0600), local CORS. Backend live on :8787.
+- [x] Registered publisher `dharsan`; config now points at the local API with
+      mock off. Real impressions settle; `--earnings` shows a live balance.
+- [x] Dashboard verified cross-origin against the local API.
+
+### Still open (needs a decision, not just time)
+- [ ] Publisher key recovery / rotation. Losing `~/.cogwait/config.json` still
+      strands the balance; `register.js` says "contact support" and no support
+      channel exists in any UI. Needs a rotation endpoint + a stated support path.
+- [ ] No advertiser-facing UI at all — `POST /campaign` is admin-token-only, so
+      the demand side has no self-serve surface.
+- [ ] Desktop app lacks the PayPal / cash-out-method UI the web dashboard has,
+      and has no in-app `--chain` equivalent (it tells the user to open a terminal).
+- [ ] `hooks/` wait-timing files are written and never read by anything.
+- [ ] No app version shown in the desktop UI and no update check.
+
+---
+
+## Phase 12 — AI-news fallback line (2026-07-22)
+
+User decision: keep ad path exactly as-is; when the statusline has **no ad** to
+render, show the most recent AI news headline instead. News is unpaid — never
+reported as an impression, never labeled `[sponsor]`.
+
+- [x] `lib/news.js` (new, dependency-free, mirrors ad-cache pattern):
+      `getCachedNews()` sync read of `~/.cogwait/news.json` + detached refresh
+      when stale (15 min TTL, 5 min min-attempt spacing via `news.stamp`);
+      `refreshNews()` anonymous GET to HN Algolia (`search_by_date`, query AI,
+      stories) — **no Authorization header, no publisher id, no session tag**;
+      overridable source via `COGWAIT_NEWS_API`/config `news_api` (tests);
+      opt-out `COGWAIT_NEWS=0`/config `news:"0"`; MOCK → static local items,
+      no network; respects `DISABLED`/level 0 (returns null).
+- [x] `bin/refresh-news.js` — detached helper, same shape as `refresh-ad.js`.
+- [x] `lib/render.js` — `renderNews(item)`: single dim `[news]` line, osc8
+      link, level-independent (unpaid → always minimal).
+- [x] `bin/statusline.js` — `if (!ad)` branch renders news (when available)
+      instead of nothing; **no `reportImpression` on the news path**.
+- [x] `test/news.js` (new, isolated HOME + local stub server, wired into
+      `package.json` scripts.test): cache/TTL, truncation, disabled/opt-out
+      gates, statusline fallback renders news, ad still wins when present,
+      offline silent no-op, nothing identifying in the news request.
+- [x] PRIVACY.md — document the anonymous news fetch + `COGWAIT_NEWS=0` control.
+- [x] Parity: `bin/render-line.js` (tmux/starship/shell hosts) gets the same
+      fallback via `platforms.renderNewsForHost` — same gating (no invented
+      rows on unsupported hosts, extensions excluded), +4 assertions.
+- [x] README — privacy bullet + `COGWAIT_NEWS=0` env row.
 
 ---
 
