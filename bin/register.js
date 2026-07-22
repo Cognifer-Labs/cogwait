@@ -35,7 +35,9 @@ client.request('POST', `${client.API_BASE}/session/init`, { publisher_id: pid },
     console.log('  Keep this key private — it authorizes your earnings and payouts.');
   } else if (code === 401) {
     console.error('✗ Publisher id already registered and no key on this machine.');
-    console.error('  Recover the key from the machine you registered on, or contact support.');
+    console.error('  Recover the key from the machine you registered on, or email');
+    console.error('  contactdharsan@gmail.com with your payout id and recovery email');
+    console.error('  (set one via the dashboard) to have the key rotated.');
     process.exit(1);
   } else {
     console.error('✗ Registration failed:', code, json && json.error);

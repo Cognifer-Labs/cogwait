@@ -817,8 +817,9 @@ Workstreams (parallel worktrees):
       → 403 no grant, own origin → exact echo, /health green. Fresh verifier
       CONFIRMED all merged work; all suites green.
 
-Assumption (stated, not silent): support email `support@cogwait.io` — brand
-domain already used for `api.cogwait.io` prod default. Flag to user if wrong.
+Support email: `contactdharsan@gmail.com` (user decision 2026-07-22 — replaced
+the assumed support@cogwait.io across dashboard, advertise, app About, and
+register.js's recovery message).
 
 Out of scope (external, unchanged): live Stripe/KYC, marketplace policy answer,
 legal review, npm/GitHub publish, Apple signing, Windows box verify, Postgres

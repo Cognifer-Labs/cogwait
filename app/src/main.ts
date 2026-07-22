@@ -650,7 +650,7 @@ async function renderAbout() {
     <div class="card"><h3>Version &amp; updates</h3>
       <div class="about-meta">
         <div><span class="k">Version</span><span class="v mono" id="ver">${ver ? esc(ver) : "—"}</span></div>
-        <div><span class="k">Support</span><a class="v" href="mailto:support@cogwait.io" id="support">support@cogwait.io</a></div>
+        <div><span class="k">Support</span><a class="v" href="mailto:contactdharsan@gmail.com" id="support">contactdharsan@gmail.com</a></div>
       </div>
       <p class="note" style="margin-top:12px">Updates ship via GitHub once the repo is public.</p>
     </div>
@@ -659,7 +659,7 @@ async function renderAbout() {
     </div>`;
   document.getElementById("repo")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait"));
   document.getElementById("privacy")?.addEventListener("click", () => openUrl("https://github.com/cognifer-labs/cogwait/blob/main/PRIVACY.md"));
-  document.getElementById("email")?.addEventListener("click", () => openUrl("mailto:support@cogwait.io"));
+  document.getElementById("email")?.addEventListener("click", () => openUrl("mailto:contactdharsan@gmail.com"));
 }
 
 // ---- helpers ----
