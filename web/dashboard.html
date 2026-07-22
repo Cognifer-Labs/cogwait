@@ -198,7 +198,8 @@
   tbody tr:hover{background:var(--blue-wash)}
   #receipt-table tbody tr:hover{background:var(--gold-wash)}
   td.amt,td.pct{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace}
-  td.pct{color:var(--gold);font-weight:700}
+  /* dollar figures and percentages read gold (§3.5 — value/money is gold) */
+  td.amt,td.pct{color:var(--gold);font-weight:700}
   .note{color:var(--dim);font-size:12px;margin-top:16px;line-height:1.55}
   .disclaimer{color:var(--faint);font-size:11.5px;margin-top:10px;line-height:1.55}
   code{background:var(--blue-wash);border:1px solid var(--blue-line);color:var(--blue-bright);border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,monospace}
@@ -233,6 +234,22 @@
   /* flat placeholder that breathes while a figure is still in flight */
   .skeleton{color:transparent!important;border-radius:6px;background:var(--blue-wash);animation:breathe 1.2s var(--e-in-out) infinite}
   @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+  /* Account & security: a sub-label inside a card, and copy-once boxes for a
+     rotated key + the config snippet to paste. */
+  .sublabel{text-transform:none;letter-spacing:0;font-size:13px;font-weight:700;color:var(--fg)}
+  .copyrow{display:flex;gap:8px;align-items:stretch;margin-top:8px}
+  .copybox{
+    flex:1;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px;
+    background:var(--panel);border:1px solid var(--border);border-radius:7px;
+    padding:9px 11px;margin:0;word-break:break-all;white-space:pre-wrap;color:var(--fg);
+  }
+  .copyrow button{width:auto;white-space:nowrap;padding:8px 12px;font-size:13px;align-self:flex-start}
+  /* the rotated-key reveal is a warning surface — old key just died → red wash */
+  .keywarn{margin-top:12px;border:1px solid var(--red-line);background:var(--red-wash);border-radius:9px;padding:13px}
+  .keywarn .sublabel{color:var(--red)}
+  #account-form-recovery{display:flex;gap:8px;margin:0}
+  footer.dash-footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--hair);text-align:center;color:var(--dim);font-size:13px}
+  footer.dash-footer a{font-weight:600}
   /* theme switch — two explicit states, not a guess-what-happens cycle button.
      The page owns its appearance; it never follows the OS silently. */
   .theme-switch{
@@ -381,11 +398,53 @@
 
     <h3>Payout history</h3>
     <table><thead><tr><th>Date</th><th>Amount</th><th>Kind</th><th>Transfer</th></tr></thead><tbody id="hist"></tbody></table>
+
+    <!-- ---- Account & security: lost-key recovery + key rotation (§10.5) ---- -->
+    <div class="row" id="account-row" style="display:none">
+      <div class="card" style="flex-basis:100%">
+        <div class="k">Account &amp; security</div>
+
+        <div style="margin-top:14px">
+          <label for="recovery-email" class="sublabel" style="display:block;margin-bottom:6px">Recovery email <span style="color:var(--faint);font-weight:400">— for lost-key recovery</span></label>
+          <form id="account-form-recovery">
+            <input id="recovery-email" type="text" inputmode="email" autocomplete="off" placeholder="you@example.com">
+            <button type="submit">Save</button>
+          </form>
+          <p class="disclaimer" id="recovery-msg" style="margin-top:6px">If you ever lose your publisher key, this is how we verify it's you and help you recover. It's never shown publicly.</p>
+        </div>
+
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--hair)">
+          <div class="sublabel">Rotate publisher key</div>
+          <p class="disclaimer" style="margin-top:4px">Issues a fresh key and permanently kills the current one. Use this if your key may have leaked. This cannot be undone.</p>
+          <button id="rotate-key" class="ghost" style="width:auto;margin-top:8px">Rotate key</button>
+          <p class="disclaimer" id="rotate-msg" style="margin-top:6px"></p>
+
+          <div id="rotate-result" class="keywarn hidden">
+            <div class="sublabel">Your new publisher key — shown once</div>
+            <p class="disclaimer" style="margin-top:4px;color:var(--fg)">The old key is now dead. Save this now — it will not be shown again. Update <code>~/.cogwait/config.json</code> so this machine keeps earning.</p>
+            <div class="copyrow">
+              <div class="copybox" id="new-key"></div>
+              <button type="button" id="copy-key">Copy key</button>
+            </div>
+            <p class="disclaimer" style="margin-top:12px;color:var(--fg)">Replace the matching fields in <code>~/.cogwait/config.json</code>:</p>
+            <div class="copyrow">
+              <pre class="copybox" id="config-snippet"></pre>
+              <button type="button" id="copy-snippet">Copy JSON</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="msg"></div>
 
   <p class="note">API base: <code id="api"></code>. A <code>?api=</code> override is honored only for an allowlisted host (the Cogwait API, this page's own origin, or loopback) so your key can't be redirected to another server. Self-hosting elsewhere? Edit <code>ALLOWED_HOSTS</code> in this file.</p>
+
+  <footer class="dash-footer">
+    Lost your key or need a hand? <a href="mailto:support@cogwait.io">support@cogwait.io</a> ·
+    <a href="advertise.html">Advertise</a>
+  </footer>
 </div>
 <script>
   // ---- theme: explicit and page-owned. Light is the product's look; dark is an
@@ -553,6 +612,12 @@
         if (d.paypal_email) $('paypal-email').placeholder = d.paypal_email;
       }
 
+      // ---- Account & security card: only meaningful once authed via earnings ----
+      $('account-row').style.display = '';
+      if (d.recovery_email !== undefined) {
+        $('recovery-email').value = String(d.recovery_email || '');
+      }
+
       // ---- Fund-OSS card: graceful degradation if this backend predates Phase 8 ----
       donatePctAvailable = d.donate_pct !== undefined;
       $('oss-unavailable').classList.toggle('hidden', donatePctAvailable);
@@ -590,7 +655,8 @@
         p.kind === 'donation' ? 'give-back' : 'cash-out',
         String(p.transfer || '') + (p.simulated ? ' (sim)' : '')
       ];
-      for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
+      // amount column reads gold + tabular-nums like every other dollar figure (§3.5)
+      cells.forEach((c, i) => { const td = document.createElement('td'); if (i === 1) td.className = 'amt'; td.textContent = c; tr.appendChild(td); });
       tb.appendChild(tr);
     }
   }
@@ -745,6 +811,76 @@
       const d = await r.json();
       if (d.ok) { el.textContent = `PayPal set (${d.paypal_email || email}).`; $('paypal-email').value = ''; load(PID); }
       else { el.textContent = 'Could not save PayPal: ' + (d.error || ''); }
+    } catch (err) { el.textContent = 'Could not reach ' + API; }
+  });
+
+  // ---- Account & security: rotate key + lost-key recovery email (same authed
+  // pattern as Cash out; both degrade gracefully on an older backend) ----
+  function copyText(text, btn) {
+    const done = () => { const o = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = o; }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+    } else { fallbackCopy(text, done); }
+  }
+  function fallbackCopy(text, done) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      done();
+    } catch (_) { /* clipboard blocked — the value is on screen to copy by hand */ }
+  }
+
+  $('rotate-key').addEventListener('click', async () => {
+    if (!PID || !KEY) return;
+    // Rotation is irreversible — mirror the cash-out confirm before firing.
+    const ok = window.confirm(
+      'Rotate your publisher key?\n\n'
+      + 'This permanently kills your current key. Any machine still using the old '
+      + 'key stops earning until you update ~/.cogwait/config.json with the new one.\n\n'
+      + 'This cannot be undone.'
+    );
+    if (!ok) { $('rotate-msg').textContent = 'Key rotation cancelled.'; return; }
+    $('rotate-msg').textContent = 'Rotating…';
+    $('rotate-key').disabled = true;
+    try {
+      const r = await fetch(`${API}/publisher/rotate-key`, {
+        method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: '{}'
+      });
+      if (r.status === 404) { $('rotate-msg').textContent = 'Key rotation is not available on this backend yet.'; $('rotate-key').disabled = false; return; }
+      const d = await r.json();
+      if (d.ok && d.publisher_key) {
+        const newKey = String(d.publisher_key);
+        $('new-key').textContent = newKey;
+        $('config-snippet').textContent = JSON.stringify({ payout_id: PID, publisher_key: newKey }, null, 2);
+        $('rotate-result').classList.remove('hidden');
+        $('rotate-msg').textContent = '';
+        // Keep this session live on the new key so the page keeps working; the old one is dead.
+        KEY = newKey; $('key').value = newKey;
+      } else {
+        $('rotate-msg').textContent = 'Could not rotate key: ' + (d.error || '');
+        $('rotate-key').disabled = false;
+      }
+    } catch (e) { $('rotate-msg').textContent = 'Could not reach ' + API; $('rotate-key').disabled = false; }
+  });
+  $('copy-key').addEventListener('click', function () { copyText($('new-key').textContent, this); });
+  $('copy-snippet').addEventListener('click', function () { copyText($('config-snippet').textContent, this); });
+
+  $('account-form-recovery').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!PID || !KEY) return;
+    const email = $('recovery-email').value.trim();
+    const el = $('recovery-msg');
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { el.textContent = 'Enter a valid email, or leave it blank to clear.'; return; }
+    el.textContent = 'Saving…';
+    try {
+      const r = await fetch(`${API}/publisher/recovery-email`, {
+        method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({ recovery_email: email })
+      });
+      if (r.status === 404) { el.textContent = 'Recovery email is not available on this backend yet.'; return; }
+      const d = await r.json();
+      el.textContent = d.ok ? (email ? 'Recovery email saved.' : 'Recovery email cleared.') : ('Could not save: ' + (d.error || ''));
     } catch (err) { el.textContent = 'Could not reach ' + API; }
   });
 

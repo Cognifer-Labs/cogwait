@@ -2,6 +2,13 @@
 
 Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your accounts)
 
+## Phase 10.x — Advertiser self-serve + dashboard account-safety (done)
+- [x] NEW web/advertise.html — advertiser self-serve; token block + theme toggle copied from dashboard.html; live dark statusline preview; POST /campaign/submit with graceful 404/429; ad text max 80 (matches server slice)
+- [x] web/index.html footer + dashboard footer: "Advertise" link
+- [x] dashboard.html: restyle payout-history amount column to tabular-nums + gold (Phase 9.2 leftover). NOTE: no "ad-level control" exists on the publisher dashboard — ad level is a campaign concept (desktop app Ad Level tab, todo §88); flagged to parent, not fabricated.
+- [x] dashboard.html account-safety: Rotate key button (confirm + copy-once box), recovery-email field, support@cogwait.io in footer/help
+
+
 ## Phase 0 — Proof of Concept (DONE)
 - [x] Verify statusline + hooks are the real mechanism (MCP can't see turn state)
 - [x] Statusline ad surface, detached refresher, privacy client, setup writer
