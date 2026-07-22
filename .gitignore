@@ -9,3 +9,4 @@ supabase/
 
 # Claude Code local state (worktrees, session files)
 .claude/
+public/
