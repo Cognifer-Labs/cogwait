@@ -1,0 +1,11 @@
+# Only the API function needs to deploy: api/ + server/ + lib/ + package.json.
+# Everything below is local tooling or build output — never upload it.
+app
+video
+node_modules
+test
+.planning
+tasks
+*.dmg
+*.png
+.git
