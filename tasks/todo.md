@@ -70,7 +70,23 @@ Status: `[x]` done · `[~]` partial · `[ ]` todo (external / needs your account
 - [x] `.claude-plugin/marketplace.json` (passes `claude plugin validate`)
 - [x] Landing page (`web/index.html`)
 - [x] Docs: README, DEPLOY, backend contract
-- [ ] Publish repo public under Cognifer Labs — **needs your GitHub org**
+- [x] Publish repo public under Cognifer Labs — LIVE at
+      https://github.com/Cognifer-Labs/cogwait (2026-07-27). Repo renamed
+      `sponsoric`→`cogwait` first so every doc link, the npm package name and the
+      `/plugin marketplace add cognifer-labs/cogwait` command resolve (GitHub 301s
+      the old URL). Pre-flight secret scan of the working tree + all 32 commits:
+      clean — only placeholders (`sk_live_...`) and the `whsec_test_secret` test
+      constant; prod secrets live outside the repo in `~/.cogwait/`. `main` was
+      fast-forwarded from `fund-oss-and-ui-redo` so the public default branch is
+      current. Rename fallout fixed in the same pass: `release-desktop.yml` repo
+      guard (would have silently killed every desktop release), `Dockerfile`
+      `SPONSORIC_DATA_DIR`→`COGWAIT_DATA_DIR` (containers were ignoring /data),
+      stale `.gitignore` patterns. Repo metadata: MIT detected, 9 topics, issues
+      on, homepage → cogwait.vercel.app.
+      Decision: `tasks/` and `.planning/` stay tracked and public (roadmap
+      transparency); the Supabase project ref in this file is a hostname, not a
+      credential, but it is now public — rotate the DB password if that ever
+      stops being true.
 - [ ] `npm publish cogwait` — **needs your npm account** (test `npx` from clean machine after)
 - [ ] Submit to community plugin registry — **after Phase 4 policy check**
 
