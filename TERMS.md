@@ -22,6 +22,20 @@ final legal text._
   exhausted.
 - Deceptive, malicious, or impersonating content is rejected and any spend frozen.
 
+## The software itself
+
+- The Cogwait source — client, backend, web surfaces, desktop app — is released
+  under the [MIT License](LICENSE) at
+  [github.com/Cognifer-Labs/cogwait](https://github.com/Cognifer-Labs/cogwait).
+  You may use, copy, modify, and redistribute it on those terms, including
+  running your own ad network from the same code.
+- These terms cover the **hosted Cogwait service** (the ad network we operate,
+  its earnings ledger, and its payouts). They do not restrict your rights under
+  the MIT license, and the MIT license does not entitle you to the hosted
+  service. If you self-host, these terms simply don't apply to you.
+- Contributions are accepted under the MIT license — see
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Disclaimers
 
 - Cogwait is not affiliated with or endorsed by Anthropic or Claude.

@@ -1,6 +1,6 @@
 name: Release Desktop
 
-# Builds the Sponsoric desktop app. On a tag push it signs + notarizes the macOS
+# Builds the Cogwait desktop app. On a tag push it signs + notarizes the macOS
 # bundle IF the Apple secrets are present; otherwise it produces an unsigned
 # build (still runnable locally via right-click → Open).
 
@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: macos-14
     # Only ever run (and thus only expose signing secrets) on this repo.
-    if: github.repository == 'Cognifer-Labs/sponsoric'
+    if: github.repository == 'Cognifer-Labs/cogwait'
     # Signing secrets live in the `release` environment — protect it with required
     # reviewers in repo settings so a release run needs a maintainer to approve.
     environment: release
@@ -52,7 +52,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sponsoric-macos
+          name: cogwait-macos
           path: |
             app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
             app/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app

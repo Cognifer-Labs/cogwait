@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json ./
 COPY server/ ./server/
 COPY lib/ ./lib/
-ENV PORT=8787 SPONSORIC_DATA_DIR=/data
+ENV PORT=8787 COGWAIT_DATA_DIR=/data
 VOLUME ["/data"]
 EXPOSE 8787
 USER node

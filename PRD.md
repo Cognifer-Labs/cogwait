@@ -29,7 +29,9 @@ Two native primitives — no MCP required for the core loop:
 ## 6. Privacy & Trust
 - **No payload:** prompt text and code are never transmitted. Hooks receive prompt data but the script forwards only anonymized `session_id`, timestamps, and publisher ID.
 - **Opt-in + visible + labeled:** ads always marked `[sponsor]`; easy off-switch; count only rendered impressions.
-- **Open source:** bridging logic public on GitHub for audit of every network call.
+- **Open source:** the whole stack — client, ad server, dashboard, desktop app —
+  is MIT on GitHub (`Cognifer-Labs/cogwait`), so every network call is auditable
+  and the network is self-hostable by anyone who doesn't want to trust ours.
 
 ## 7. Go-To-Market
 1. **PoC:** local `--plugin-dir` run; confirm rendered-impression settlement.

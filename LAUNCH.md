@@ -30,10 +30,12 @@ viewable-only billing. Never claim passive income is guaranteed.
 > a human — enforced by client throttle + server dedupe + per-session caps; (2)
 > zero prompt/code/file data leaves the machine, only a hashed session tag; (3)
 > zero runtime dependencies; (4) never manufacture delay. It's the same shape as
-> IdleDev/idlepay/Kickbacks but I open-sourced the whole bridge so you can audit
-> every network call. Honest caveat: whether advertisers pay enough for a
-> one-line terminal placement is still unproven — that's the real risk, not the
-> tech. Code + privacy doc in the repo.
+> IdleDev/idlepay/Kickbacks, except the whole thing is MIT — not just the client
+> but the ad server, the dashboard and the payout logic — so you can audit every
+> network call and, if you'd rather not trust my server, run the network
+> yourself. Honest caveat: whether advertisers pay enough for a one-line terminal
+> placement is still unproven — that's the real risk, not the tech.
+> https://github.com/Cognifer-Labs/cogwait
 
 ## X / thread
 
@@ -42,7 +44,8 @@ viewable-only billing. Never claim passive income is guaranteed.
 2. One `[sponsor]` line in the Claude Code status row. Labeled. Opt-in.
    Dismissible. You keep 70%.
 3. It never reads your code, prompts, or files. Only a hashed session tag +
-   timestamp leave your machine. Open source — audit it.
+   timestamp leave your machine. Don't take my word for it — the whole stack is
+   MIT on GitHub. Audit it, or self-host the whole network.
 4. Impressions bill only when the line is actually on your screen. No phantom
    views. No fake delays to serve more ads.
 5. `npx cogwait` to try · `--uninstall` to remove · `COGWAIT_MOCK=1` to demo

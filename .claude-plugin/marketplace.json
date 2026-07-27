@@ -10,9 +10,9 @@
     {
       "name": "cogwait",
       "source": "./",
-      "description": "Earn revenue while your AI thinks — one opt-in, clearly labeled sponsor line in the Claude Code status row. Never reads your code, files, or prompts.",
+      "description": "Earn revenue while your AI thinks — one opt-in, clearly labeled sponsor line in the Claude Code status row. Never reads your code, files, or prompts. Fully open source (MIT).",
       "version": "0.1.0",
-      "keywords": ["ads", "monetization", "statusline", "sponsor", "wait-time"],
+      "keywords": ["ads", "monetization", "statusline", "sponsor", "wait-time", "open-source"],
       "defaultEnabled": false
     }
   ]

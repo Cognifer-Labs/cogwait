@@ -3,7 +3,7 @@
   "name": "cogwait",
   "displayName": "Cogwait",
   "version": "0.1.0",
-  "description": "Earn revenue while your AI thinks. One opt-in, clearly labeled sponsor line in the Claude Code status row — never reads your code, files, or prompts.",
+  "description": "Earn revenue while your AI thinks. One opt-in, clearly labeled sponsor line in the Claude Code status row — never reads your code, files, or prompts. Fully open source (MIT): read every outbound call, or self-host the network.",
   "author": {
     "name": "Cognifer Labs LLC",
     "url": "https://github.com/cognifer-labs"
@@ -11,6 +11,6 @@
   "homepage": "https://github.com/cognifer-labs/cogwait",
   "repository": "https://github.com/cognifer-labs/cogwait",
   "license": "MIT",
-  "keywords": ["ads", "monetization", "statusline", "sponsor", "wait-time"],
+  "keywords": ["ads", "monetization", "statusline", "sponsor", "wait-time", "open-source"],
   "defaultEnabled": false
 }

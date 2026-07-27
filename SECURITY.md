@@ -2,8 +2,14 @@
 
 ## Reporting a vulnerability
 
-Email security@cognifer-labs.example (replace with real address before launch).
-Do not open public issues for security reports. We aim to acknowledge within 72h.
+Email **contactdharsan@gmail.com**. Do not open a public issue, pull request, or
+discussion for a security report — this repository is public, so anything filed
+there is disclosed the moment you file it. We aim to acknowledge within 72h.
+
+Coordinated disclosure: report privately, we confirm and fix, then the finding is
+credited in this file once a release carrying the fix is out. Because the whole
+stack is open source (MIT), you are welcome — encouraged — to read and audit any
+of it, including `lib/client.js` and every `bin/` script, before reporting.
 
 ## Threat model & mitigations
 

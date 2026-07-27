@@ -1,8 +1,43 @@
 # Cogwait
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/Cognifer-Labs/cogwait/actions/workflows/ci.yml/badge.svg)](https://github.com/Cognifer-Labs/cogwait/actions/workflows/ci.yml)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-blue.svg)](package.json)
+[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](package.json)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-blueviolet.svg)](CONTRIBUTING.md)
+
 **Earn revenue while your AI thinks.** Cogwait renders one opt-in, clearly labeled sponsor line in the Claude Code status row while you work, and shares ad revenue with you. It **never reads your code, files, prompts, or environment** — the only thing that leaves your machine is an anonymized session tag, the ad id, and a timestamp.
 
 Same model as [IdleDev](https://idledev.xyz), [idlepay](https://www.idlepay.co), [Idlen](https://www.idlen.io), and [Kickbacks AI](https://kickbacksai.org): a labeled status-line placement, opt-in, no interruptions, revenue share. Impressions count **only when the line is actually rendered to a human** — no phantom impressions.
+
+## Open source
+
+Cogwait is open source under the [MIT license](LICENSE) — **all of it**, not just a
+client shim:
+
+| Part | Where |
+| --- | --- |
+| Status-line client (the ad surface) | [`bin/`](bin/), [`lib/`](lib/) |
+| Backend / ad server + payouts | [`server/`](server/), [`api/`](api/) |
+| Landing page, publisher dashboard, advertiser self-serve | [`web/`](web/) |
+| Desktop control panel (Tauri + Rust) | [`app/`](app/) |
+| VS Code + JetBrains extensions | [`ide/`](ide/) |
+| Tests | [`test/`](test/) |
+
+That matters for an ad product specifically: **you don't have to take our word for
+what leaves your machine — you can read it.** Every outbound request is in
+[`lib/client.js`](lib/client.js) and the `bin/` scripts, in plain unminified JS
+with zero runtime dependencies to hide behind. The impression rules described
+under [Privacy](#privacy) are claims you can check against the source, and the
+[backend contract](#backend-contract-for-the-cogwait-network) is fully specified,
+so you can run the whole network yourself.
+
+- **Fork it, self-host it, run your own network.** `node server/index.js` or the
+  [`Dockerfile`](Dockerfile); see [`docs/DEPLOY.md`](docs/DEPLOY.md).
+- **Point the client anywhere.** `COGWAIT_API=https://your-server` — nothing binds
+  you to our backend.
+- **Contributions welcome.** See [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Found a vulnerability?** Report it privately — [SECURITY.md](SECURITY.md).
 
 ## Install
 
@@ -152,6 +187,14 @@ Proof of concept. The client works end-to-end in `COGWAIT_MOCK=1` mode today. Li
 
 Run the smoke test: `npm test`.
 
+## Contributing
+
+Issues and pull requests are welcome — bug reports, platform fixes (Windows path
+handling especially), backend adapters, IDE surfaces, docs. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and what "done" looks like
+here. Security issues go to [SECURITY.md](SECURITY.md), never a public issue.
+
 ## License
 
-MIT © Cognifer Labs LLC
+[MIT](LICENSE) © Cognifer Labs LLC. Use it, fork it, ship it, run your own
+network on it — the license is the whole condition.

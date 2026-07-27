@@ -47,8 +47,10 @@ My questions:
    isn't (e.g. disclosure requirements, opt-in wording, content rules)?
 
 I'd rather adjust the design now than launch something non-compliant.
-Happy to share the full source — the project is built to be auditable
-(privacy policy, ad policy, and threat model are in the repo).
+The full source is public and MIT-licensed at
+https://github.com/Cognifer-Labs/cogwait — client, ad server, and all — so
+nothing about the design has to be taken on trust. The privacy policy, ad policy,
+and threat model are in the same repo.
 
 Thanks,
 Dharsan

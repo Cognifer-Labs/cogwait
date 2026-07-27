@@ -53,5 +53,18 @@ in `~/.cogwait/config.json`).
 
 ## Open source
 
-The bridging client is open source. Read `lib/client.js` and audit every network
-request before trusting it.
+Every claim on this page is checkable, because the entire project is open source
+under the [MIT license](LICENSE) at
+[github.com/Cognifer-Labs/cogwait](https://github.com/Cognifer-Labs/cogwait) —
+not just the client, but the ad server, the dashboard, and the desktop app too.
+
+- Every outbound request lives in [`lib/client.js`](lib/client.js) and the
+  [`bin/`](bin/) scripts — unminified JavaScript, zero runtime dependencies, so
+  there is no third-party code path that could transmit anything we don't
+  describe here.
+- The server side that receives it all is in [`server/`](server/).
+- Don't want to trust our server at all? Point the client somewhere else with
+  `COGWAIT_API`, or run the whole network yourself — see
+  [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+Audit it before trusting it. That is the intended workflow, not a fallback.
